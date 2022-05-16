@@ -1,6 +1,6 @@
-.PHONY: XPS XPS-cross evm all test clean
-.PHONY: XPS-linux XPS-linux-386 XPS-linux-amd64 XPS-linux-mips64 XPS-linux-mips64le
-.PHONY: XPS-darwin XPS-darwin-386 XPS-darwin-amd64
+.PHONY: gpay gpay-cross evm all test clean
+.PHONY: gpay-linux gpay-linux-386 gpay-linux-amd64 gpay-linux-mips64 gpay-linux-mips64le
+.PHONY: gpay-darwin gpay-darwin-386 gpay-darwin-amd64
 
 GOBIN = $(shell pwd)/build/bin
 GOFMT = gofmt
@@ -10,10 +10,10 @@ GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.
 
 GIT = git
 
-XPS:
-	build/env.sh go run build/ci.go install ./cmd/XPS
+gpay:
+	build/env.sh go run build/ci.go install ./cmd/gpay
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/XPS\" to launch XPS."
+	@echo "Run \"$(GOBIN)/gpay\" to launch gpay."
 
 gc:
 	build/env.sh go run build/ci.go install ./cmd/gc
@@ -41,57 +41,57 @@ clean:
 
 # Cross Compilation Targets (xgo)
 
-XPS-cross: XPS-linux XPS-darwin
+gpay-cross: gpay-linux gpay-darwin
 	@echo "Full cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-*
+	@ls -ld $(GOBIN)/gpay-*
 
-XPS-linux: XPS-linux-386 XPS-linux-amd64 XPS-linux-mips64 XPS-linux-mips64le
+gpay-linux: gpay-linux-386 gpay-linux-amd64 gpay-linux-mips64 gpay-linux-mips64le
 	@echo "Linux cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-*
+	@ls -ld $(GOBIN)/gpay-linux-*
 
-XPS-linux-386:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/XPS
+gpay-linux-386:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/gpay
 	@echo "Linux 386 cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-* | grep 386
+	@ls -ld $(GOBIN)/gpay-linux-* | grep 386
 
-XPS-linux-amd64:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/XPS
+gpay-linux-amd64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/gpay
 	@echo "Linux amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-* | grep amd64
+	@ls -ld $(GOBIN)/gpay-linux-* | grep amd64
 
-XPS-linux-mips:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/XPS
+gpay-linux-mips:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/gpay
 	@echo "Linux MIPS cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-* | grep mips
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mips
 
-XPS-linux-mipsle:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/XPS
+gpay-linux-mipsle:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/gpay
 	@echo "Linux MIPSle cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-* | grep mipsle
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mipsle
 
-XPS-linux-mips64:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/XPS
+gpay-linux-mips64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/gpay
 	@echo "Linux MIPS64 cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-* | grep mips64
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mips64
 
-XPS-linux-mips64le:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/XPS
+gpay-linux-mips64le:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/gpay
 	@echo "Linux MIPS64le cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-linux-* | grep mips64le
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mips64le
 
-XPS-darwin: XPS-darwin-386 XPS-darwin-amd64
+gpay-darwin: gpay-darwin-386 gpay-darwin-amd64
 	@echo "Darwin cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-darwin-*
+	@ls -ld $(GOBIN)/gpay-darwin-*
 
-XPS-darwin-386:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/XPS
+gpay-darwin-386:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/gpay
 	@echo "Darwin 386 cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-darwin-* | grep 386
+	@ls -ld $(GOBIN)/gpay-darwin-* | grep 386
 
-XPS-darwin-amd64:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/XPS
+gpay-darwin-amd64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/gpay
 	@echo "Darwin amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XPS-darwin-* | grep amd64
+	@ls -ld $(GOBIN)/gpay-darwin-* | grep amd64
 
 gofmt:
 	$(GOFMT) -s -w $(GO_FILES)
