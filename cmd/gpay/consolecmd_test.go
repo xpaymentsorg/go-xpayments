@@ -40,25 +40,25 @@ const (
 func TestConsoleWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
-	// Start a XPS console, make sure it's cleaned up and terminate the console
-	XPS := runXPS(t,
+	// Start a gpay console, make sure it's cleaned up and terminate the console
+	gpay := rungpay(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase,
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
-	XPS.SetTemplateFunc("goos", func() string { return runtime.GOOS })
-	XPS.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
-	XPS.SetTemplateFunc("gover", runtime.Version)
-	XPS.SetTemplateFunc("XPSver", func() string { return params.Version })
-	XPS.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	XPS.SetTemplateFunc("apis", func() string { return ipcAPIs })
+	gpay.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	gpay.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	gpay.SetTemplateFunc("gover", runtime.Version)
+	gpay.SetTemplateFunc("gpayver", func() string { return params.Version })
+	gpay.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	gpay.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
-	XPS.Expect(`
-Welcome to the XPS JavaScript console!
+	gpay.Expect(`
+Welcome to the gpay JavaScript console!
 
-instance: XPS/v{{XPSver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: gpay/v{{gpayver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
@@ -66,7 +66,7 @@ at block: 0 ({{niltime}})
 
 > {{.InputLine "exit"}}
 `)
-	XPS.ExpectExit()
+	gpay.ExpectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
@@ -75,55 +75,55 @@ func TestIPCAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
-		ipc = `\\.\pipe\XPS` + strconv.Itoa(trulyRandInt(100000, 999999))
+		ipc = `\\.\pipe\gpay` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
 		ws := tmpdir(t)
 		defer os.RemoveAll(ws)
-		ipc = filepath.Join(ws, "XPS.ipc")
+		ipc = filepath.Join(ws, "gpay.ipc")
 	}
-	XPS := runXPS(t,
+	gpay := rungpay(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, XPS, "ipc:"+ipc, ipcAPIs)
+	testAttachWelcome(t, gpay, "ipc:"+ipc, ipcAPIs)
 
-	XPS.Interrupt()
-	XPS.ExpectExit()
+	gpay.Interrupt()
+	gpay.ExpectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
-	XPS := runXPS(t,
+	gpay := rungpay(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, XPS, "http://localhost:"+port, httpAPIs)
+	testAttachWelcome(t, gpay, "http://localhost:"+port, httpAPIs)
 
-	XPS.Interrupt()
-	XPS.ExpectExit()
+	gpay.Interrupt()
+	gpay.ExpectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
-	XPS := runXPS(t,
+	gpay := rungpay(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, XPS, "ws://localhost:"+port, httpAPIs)
+	testAttachWelcome(t, gpay, "ws://localhost:"+port, httpAPIs)
 
-	XPS.Interrupt()
-	XPS.ExpectExit()
+	gpay.Interrupt()
+	gpay.ExpectExit()
 }
 
-func testAttachWelcome(t *testing.T, XPS *testXPS, endpoint, apis string) {
-	// Attach to a running XPS note and terminate immediately
-	attach := runXPS(t, "attach", endpoint)
+func testAttachWelcome(t *testing.T, gpay *testgpay, endpoint, apis string) {
+	// Attach to a running gpay note and terminate immediately
+	attach := rungpay(t, "attach", endpoint)
 	defer attach.ExpectExit()
 	attach.CloseStdin()
 
@@ -131,18 +131,18 @@ func testAttachWelcome(t *testing.T, XPS *testXPS, endpoint, apis string) {
 	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.SetTemplateFunc("gover", runtime.Version)
-	attach.SetTemplateFunc("XPSver", func() string { return params.Version })
-	attach.SetTemplateFunc("etherbase", func() string { return XPS.Etherbase })
+	attach.SetTemplateFunc("gpayver", func() string { return params.Version })
+	attach.SetTemplateFunc("etherbase", func() string { return gpay.Etherbase })
 	attach.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.SetTemplateFunc("datadir", func() string { return XPS.Datadir })
+	attach.SetTemplateFunc("datadir", func() string { return gpay.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })
 
 	// Verify the actual welcome message to the required template
 	attach.Expect(`
-Welcome to the XPS JavaScript console!
+Welcome to the gpay JavaScript console!
 
-instance: XPS/v{{XPSver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: gpay/v{{gpayver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}

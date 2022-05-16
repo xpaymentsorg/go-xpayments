@@ -41,7 +41,7 @@ var (
 		Flags:    append(append(append(nodeFlags, rpcFlags...), consoleFlags...), whisperFlags...),
 		Category: "CONSOLE COMMANDS",
 		Description: `
-The XPS console is an interactive shell for the JavaScript runtime environment
+The gpay console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/xpaymentsorg/go-xpayments/wiki/JavaScript-Console.`,
 	}
@@ -54,10 +54,10 @@ See https://github.com/xpaymentsorg/go-xpayments/wiki/JavaScript-Console.`,
 		Flags:     append(consoleFlags, utils.DataDirFlag),
 		Category:  "CONSOLE COMMANDS",
 		Description: `
-The XPS console is an interactive shell for the JavaScript runtime environment
+The gpay console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/xpaymentsorg/go-xpayments/wiki/JavaScript-Console.
-This command allows to open a console on a running XPS node.`,
+This command allows to open a console on a running gpay node.`,
 	}
 
 	javascriptCommand = cli.Command{
@@ -73,7 +73,7 @@ JavaScript API. See https://github.com/xpaymentsorg/go-xpayments/wiki/JavaScript
 	}
 )
 
-// localConsole starts a new XPS node, attaching a JavaScript console to it at the
+// localConsole starts a new gpay node, attaching a JavaScript console to it at the
 // same time.
 func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
@@ -84,7 +84,7 @@ func localConsole(ctx *cli.Context) error {
 	// Attach to the newly started node and start the JavaScript console
 	client, err := node.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc XPS: %v", err)
+		utils.Fatalf("Failed to attach to the inproc gpay: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -111,10 +111,10 @@ func localConsole(ctx *cli.Context) error {
 	return nil
 }
 
-// remoteConsole will connect to a remote XPS instance, attaching a JavaScript
+// remoteConsole will connect to a remote gpay instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
-	// Attach to a remotely running XPS instance and start the JavaScript console
+	// Attach to a remotely running gpay instance and start the JavaScript console
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		path := node.DefaultDataDir()
@@ -122,18 +122,16 @@ func remoteConsole(ctx *cli.Context) error {
 			path = ctx.GlobalString(utils.DataDirFlag.Name)
 		}
 		if path != "" {
-			if ctx.GlobalBool(utils.TestnetFlag.Name) {
-				path = filepath.Join(path, "testnet")
-			} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
-				path = filepath.Join(path, "rinkeby")
+			if ctx.GlobalBool(utils.BerylliumFlag.Name) {
+				path = filepath.Join(path, "beryllium")
 			}
 		}
-		endpoint = fmt.Sprintf("%s/XPS.ipc", path)
+		endpoint = fmt.Sprintf("%s/gpay.ipc", path)
 	}
 
 	client, err := dialRPC(endpoint)
 	if err != nil {
-		utils.Fatalf("Unable to attach to remote XPS: %v", err)
+		utils.Fatalf("Unable to attach to remote gpay: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -162,7 +160,7 @@ func remoteConsole(ctx *cli.Context) error {
 
 // dialRPC returns a RPC client which connects to the given endpoint.
 // The check for empty endpoint implements the defaulting logic
-// for "XPS attach" and "XPS monitor" with no argument.
+// for "gpay attach" and "gpay monitor" with no argument.
 func dialRPC(endpoint string) (*rpc.Client, error) {
 	if endpoint == "" {
 		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
@@ -174,7 +172,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 	return rpc.Dial(endpoint)
 }
 
-// ephemeralConsole starts a new XPS node, attaches an ephemeral JavaScript
+// ephemeralConsole starts a new gpay node, attaches an ephemeral JavaScript
 // console to it, executes each of the files specified as arguments and tears
 // everything down.
 func ephemeralConsole(ctx *cli.Context) error {
@@ -186,7 +184,7 @@ func ephemeralConsole(ctx *cli.Context) error {
 	// Attach to the newly started node and start the JavaScript console
 	client, err := node.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc XPS: %v", err)
+		utils.Fatalf("Failed to attach to the inproc gpay: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),

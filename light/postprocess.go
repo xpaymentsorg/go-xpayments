@@ -64,8 +64,8 @@ var (
 		bloomTrieRoot: common.HexToHash("d6db6e6248354d7453391ce97830072a28ea4216be0bd95a5db9f53b1a64677b"),
 	}
 
-	ropstenCheckpoint = trustedCheckpoint{
-		name:          "ropsten",
+	berylliumCheckpoint = trustedCheckpoint{
+		name:          "beryllium",
 		sectionIdx:    87,
 		sectionHead:   common.HexToHash("ebc0adcb30ed21cbe95bd77499cc1af0bada621fee3644cb80dbcf1444c123fe"),
 		chtRoot:       common.HexToHash("d9830f4893c821ddf149b8cb9d3e3bfe3109d2eea8e3c4a4ede7c8b2ee8a7800"),
@@ -75,8 +75,8 @@ var (
 
 // trustedCheckpoints associates each known checkpoint with the genesis hash of the chain it belongs to
 var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
-	params.MainnetGenesisHash: mainnetCheckpoint,
-	params.TestnetGenesisHash: ropstenCheckpoint,
+	params.MainnetGenesisHash:   mainnetCheckpoint,
+	params.BerylliumGenesisHash: berylliumCheckpoint,
 }
 
 var (

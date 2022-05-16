@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	clientIdentifier = "XPS" // Client identifier to advertise over the network
+	clientIdentifier = "gpay" // Client identifier to advertise over the network
 )
 
 var (
@@ -59,17 +59,6 @@ var (
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		//utils.NoUSBFlag,
-		//utils.DashboardEnabledFlag,
-		//utils.DashboardAddrFlag,
-		//utils.DashboardPortFlag,
-		//utils.DashboardRefreshFlag,
-		//utils.EthashCacheDirFlag,
-		//utils.EthashCachesInMemoryFlag,
-		//utils.EthashCachesOnDiskFlag,
-		//utils.EthashDatasetDirFlag,
-		//utils.EthashDatasetsInMemoryFlag,
-		//utils.EthashDatasetsOnDiskFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -84,13 +73,6 @@ var (
 		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
-		//utils.LightServFlag,
-		//utils.LightPeersFlag,
-		//utils.LightKDFFlag,
-		//utils.CacheFlag,
-		//utils.CacheDatabaseFlag,
-		//utils.CacheGCFlag,
-		//utils.TrieCacheGenFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -101,26 +83,14 @@ var (
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
-		//utils.DiscoveryV5Flag,
-		//utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
-		//utils.DeveloperFlag,
-		//utils.DeveloperPeriodFlag,
-		//utils.TestnetFlag,
-		//utils.RinkebyFlag,
-		//utils.VMEnableDebugFlag,
-		utils.XPSTestnetFlag,
+		utils.BerylliumFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
-		//utils.FakePoWFlag,
-		//utils.NoCompactionFlag,
-		//utils.GpoBlocksFlag,
-		//utils.GpoPercentileFlag,
-		//utils.ExtraDataFlag,
 		configFileFlag,
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
@@ -149,8 +119,8 @@ var (
 )
 
 func init() {
-	// Initialize the CLI app and start XPS
-	app.Action = XPS
+	// Initialize the CLI app and start gpay
+	app.Action = gpay
 	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright (c) 2021-2022 xPaymentsChain"
 	app.Commands = []cli.Command{
@@ -206,10 +176,10 @@ func main() {
 	}
 }
 
-// XPS is the main entry point into the system if no special subcommand is ran.
+// gpay is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func XPS(ctx *cli.Context) error {
+func gpay(ctx *cli.Context) error {
 	node, cfg := makeFullNode(ctx)
 	startNode(ctx, node, cfg)
 	node.Wait()
@@ -219,7 +189,7 @@ func XPS(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
+func startNode(ctx *cli.Context, stack *node.Node, cfg gpayConfig) {
 	// Start up the node itself
 	utils.StartNode(stack)
 

@@ -26,8 +26,6 @@ import (
 	"strings"
 	"unicode"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/naoina/toml"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
@@ -38,6 +36,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -88,7 +87,7 @@ type Bootnodes struct {
 	Testnet []string
 }
 
-type XPSConfig struct {
+type gpayConfig struct {
 	Eth         eth.Config
 	Shh         whisper.Config
 	Node        node.Config
@@ -101,7 +100,7 @@ type XPSConfig struct {
 	NAT         string
 }
 
-func loadConfig(file string, cfg *XPSConfig) error {
+func loadConfig(file string, cfg *gpayConfig) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -121,13 +120,13 @@ func defaultNodeConfig() node.Config {
 	cfg.Version = params.VersionWithCommit(gitCommit)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
 	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
-	cfg.IPCPath = "XPS.ipc"
+	cfg.IPCPath = "gpay.ipc"
 	return cfg
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, XPSConfig) {
+func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	// Load defaults.
-	cfg := XPSConfig{
+	cfg := gpayConfig{
 		Eth:         eth.DefaultConfig,
 		Shh:         whisper.DefaultConfig,
 		Node:        defaultNodeConfig(),
@@ -154,7 +153,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XPSConfig) {
 	}
 
 	// Check testnet is enable.
-	if ctx.GlobalBool(utils.XPSTestnetFlag.Name) {
+	if ctx.GlobalBool(utils.BerylliumFlag.Name) {
 		common.IsTestnet = true
 	}
 
@@ -225,7 +224,7 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) (*node.Node, XPSConfig) {
+func makeFullNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
 	utils.RegisterEthService(stack, &cfg.Eth)
