@@ -16,7 +16,7 @@
 
 // Contains all the wrappers from the params package.
 
-package geth
+package gpay
 
 import (
 	"encoding/json"
@@ -32,18 +32,9 @@ func MainnetGenesis() string {
 	return ""
 }
 
-// TestnetGenesis returns the JSON spec to use for the Ethereum test network.
-func TestnetGenesis() string {
-	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
-
-// RinkebyGenesis returns the JSON spec to use for the Rinkeby test network
-func RinkebyGenesis() string {
-	enc, err := json.Marshal(core.DefaultRinkebyGenesisBlock())
+// BerylliumGenesis returns the JSON spec to use for the Beryllium test network
+func BerylliumGenesis() string {
+	enc, err := json.Marshal(core.DefaultBerylliumGenesisBlock())
 	if err != nil {
 		panic(err)
 	}

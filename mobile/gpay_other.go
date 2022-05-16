@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build android
+//go:build !android && !ios
+// +build !android,!ios
 
-package geth
+package gpay
 
 // clientIdentifier is a hard coded identifier to report into the network.
-var clientIdentifier = "GethDroid"
+var clientIdentifier = "GpayMobile"
