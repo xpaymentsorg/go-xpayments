@@ -29,7 +29,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
-	"github.com/xpaymentsorg/go-xpayments/console"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/ethclient"
@@ -164,7 +164,7 @@ func init() {
 
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
-		console.Stdin.Close() // Resets terminal mode.
+		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }

@@ -51,7 +51,9 @@ func TestConsoleWelcome(t *testing.T) {
 	gpay.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	gpay.SetTemplateFunc("gover", runtime.Version)
 	gpay.SetTemplateFunc("gpayver", func() string { return params.Version })
-	gpay.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	gpay.SetTemplateFunc("niltime", func() string {
+		return time.Unix(0, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
+	})
 	gpay.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
@@ -133,7 +135,9 @@ func testAttachWelcome(t *testing.T, gpay *testgpay, endpoint, apis string) {
 	attach.SetTemplateFunc("gover", runtime.Version)
 	attach.SetTemplateFunc("gpayver", func() string { return params.Version })
 	attach.SetTemplateFunc("etherbase", func() string { return gpay.Etherbase })
-	attach.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	attach.SetTemplateFunc("niltime", func() string {
+		return time.Unix(0, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
+	})
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
 	attach.SetTemplateFunc("datadir", func() string { return gpay.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })

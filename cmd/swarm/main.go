@@ -32,7 +32,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/console"
+	prompt_console "github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/ethclient"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
@@ -534,7 +534,7 @@ func getPassPhrase(prompt string, i int, passwords []string) string {
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
-	password, err := console.Stdin.PromptPassword("Passphrase: ")
+	password, err := prompt_console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
 	}

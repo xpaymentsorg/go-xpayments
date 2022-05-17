@@ -28,7 +28,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/console"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
@@ -424,7 +424,7 @@ func removeDB(ctx *cli.Context) error {
 		}
 		// Confirm removal and execute
 		fmt.Println(dbdir)
-		confirm, err := console.Stdin.PromptConfirm("Remove this database?")
+		confirm, err := prompt.Stdin.PromptConfirm("Remove this database?")
 		switch {
 		case err != nil:
 			utils.Fatalf("%v", err)
