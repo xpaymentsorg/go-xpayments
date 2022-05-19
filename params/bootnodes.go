@@ -20,8 +20,8 @@ package params
 // the main Ethereum network.
 var MainnetBootnodes = []string{
 	// Ethereum Foundation Go Bootnodes
-	"", // BR
-	"", // USA
+	"enode://b2fa0155c7c4bb0921765de2753c46424f53b01b00ba1fbccff632cfb2a7ed4fe32406e4e176fb58cd92f68c4de2a062f9181558987cd6039a3557b9ef48c8ed@170.82.241.117:30350",  // BR
+	"enode://0279e35016791b272a0cdf721ec20db77827b806682df5b7dbb29810098b5511764cca849ecbe2c6dcf63222782a78d8f49787f65c811162f6992a6607fc8826@194.195.210.119:30350", // USA
 }
 
 // BerylliumBootnodes are the enode URLs of the P2P bootstrap nodes running on the
@@ -33,5 +33,6 @@ var BerylliumBootnodes = []string{
 // DiscoveryV5Bootnodes are the enode URLs of the P2P bootstrap nodes for the
 // experimental RLPx v5 topic-discovery network.
 var DiscoveryV5Bootnodes = []string{
-	"", // BR
+	"enode://b2fa0155c7c4bb0921765de2753c46424f53b01b00ba1fbccff632cfb2a7ed4fe32406e4e176fb58cd92f68c4de2a062f9181558987cd6039a3557b9ef48c8ed@170.82.241.117:30350",  // BR
+	"enode://0279e35016791b272a0cdf721ec20db77827b806682df5b7dbb29810098b5511764cca849ecbe2c6dcf63222782a78d8f49787f65c811162f6992a6607fc8826@194.195.210.119:30350", // USA
 }
