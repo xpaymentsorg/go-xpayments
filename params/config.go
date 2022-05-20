@@ -44,7 +44,7 @@ var (
 			Reward:              250,
 			RewardCheckpoint:    900,
 			Gap:                 5,
-			FoudationWalletAddr: common.HexToAddress("0x93893e6238aE33eeDe4A91C355065fb611d29eb4"),
+			FoudationWalletAddr: common.HexToAddress("xps0000000000000000000000000000000000000013"),
 		},
 	}
 
