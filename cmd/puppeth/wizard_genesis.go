@@ -169,11 +169,11 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XPoS.Gap = uint64(w.readDefaultInt(5))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = xps93893e6238aE33eeDe4A91C355065fb611d29eb4)")
+		fmt.Println("What is foundation wallet address? (default = xps0000000000000000000000000000000000000013)")
 		genesis.Config.XPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
-		pKey, _ := crypto.HexToECDSA("887ca2d87631f9ea6d8e7eb2048bb94c0598200a6175b2af56b027c3522ae990")
+		pKey, _ := crypto.HexToECDSA("887ca2d87631f9ea6d8e7eb2048bb94c0598200a6175b2af56b027c3522ae990") // xps0542ef4e582920cbfbae91a9441a915a43aa1eda
 		addr := crypto.PubkeyToAddress(pKey.PublicKey)
 		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 		transactOpts := bind.NewKeyedTransactor(pKey)

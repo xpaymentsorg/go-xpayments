@@ -30,11 +30,11 @@ import (
 const (
 	HashLength          = 32
 	AddressLength       = 20
-	MasternodeVotingSMC = "xpscf33d4F38a96879eFCDCe7C0AaFa6d5e1fA60e7f"
-	BlockSigners        = "xps3505fA26D159c4D001C5612855f1Af14Cb7B1A4C"
-	RandomizeSMC        = "xps64DFE3617EB6fb351d5DD1d08eAFc7454E114f79"
-	FoudationAddr       = "xps93893e6238aE33eeDe4A91C355065fb611d29eb4"
-	TeamAddr            = "xps0C935C345D5D133720DDe12e2aE2CFBBdB267560"
+	MasternodeVotingSMC = "xps0000000000000000000000000000000000000010"
+	BlockSigners        = "xps0000000000000000000000000000000000000011"
+	RandomizeSMC        = "xps0000000000000000000000000000000000000012"
+	FoudationAddr       = "xps0000000000000000000000000000000000000013"
+	TeamAddr            = "xps0000000000000000000000000000000000000014"
 	VoteMethod          = "0x6dd7d8ea"
 	UnvoteMethod        = "0x02aa9be2"
 	ProposeMethod       = "0x01267951"
