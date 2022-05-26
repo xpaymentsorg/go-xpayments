@@ -120,7 +120,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XPoS.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
-		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
+		fmt.Println("How many XPS should be rewarded to masternode? (default = 10)")
 		genesis.Config.XPoS.Reward = uint64(w.readDefaultInt(10))
 
 		fmt.Println()
@@ -165,15 +165,15 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XPoS.RewardCheckpoint = epochNumber
 
 		fmt.Println()
-		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 450)")
-		genesis.Config.XPoS.Gap = uint64(w.readDefaultInt(450))
+		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 5)")
+		genesis.Config.XPoS.Gap = uint64(w.readDefaultInt(5))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = xps0000000000000000000000000000000000000068)")
+		fmt.Println("What is foundation wallet address? (default = xps0000000000000000000000000000000000000100)")
 		genesis.Config.XPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
-		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		pKey, _ := crypto.HexToECDSA("887ca2d87631f9ea6d8e7eb2048bb94c0598200a6175b2af56b027c3522ae990")
 		addr := crypto.PubkeyToAddress(pKey.PublicKey)
 		contractBackend := backends.NewXPSSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000, params.TestXPoSMockChainConfig)
 		transactOpts := bind.NewKeyedTransactor(pKey)

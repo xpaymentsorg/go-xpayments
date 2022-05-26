@@ -4,7 +4,7 @@ contract XPSXListing {
 
     address[] _tokens;
     mapping(address => TokenState) tokensState;
-    address constant private foundation = 0x0000000000000000000000000000000000000068;
+    address constant private foundation = 0x0000000000000000000000000000000000000100;
 
     struct TokenState {
         bool isActive;
