@@ -16,19 +16,19 @@
 
 package ethclient
 
-import ethereum "github.com/xpaymentsorg/go-xpayments"
+import xpayments "github.com/xpaymentsorg/go-xpayments"
 
 // Verify that Client implements the ethereum interfaces.
 var (
-	_ = ethereum.ChainReader(&Client{})
-	_ = ethereum.TransactionReader(&Client{})
-	_ = ethereum.ChainStateReader(&Client{})
-	_ = ethereum.ChainSyncReader(&Client{})
-	_ = ethereum.ContractCaller(&Client{})
-	_ = ethereum.GasEstimator(&Client{})
-	_ = ethereum.GasPricer(&Client{})
-	_ = ethereum.LogFilterer(&Client{})
-	_ = ethereum.PendingStateReader(&Client{})
-	// _ = ethereum.PendingStateEventer(&Client{})
-	_ = ethereum.PendingContractCaller(&Client{})
+	_ = xpayments.ChainReader(&Client{})
+	_ = xpayments.TransactionReader(&Client{})
+	_ = xpayments.ChainStateReader(&Client{})
+	_ = xpayments.ChainSyncReader(&Client{})
+	_ = xpayments.ContractCaller(&Client{})
+	_ = xpayments.GasEstimator(&Client{})
+	_ = xpayments.GasPricer(&Client{})
+	_ = xpayments.LogFilterer(&Client{})
+	_ = xpayments.PendingStateReader(&Client{})
+	// _ = xpayments.PendingStateEventer(&Client{})
+	_ = xpayments.PendingContractCaller(&Client{})
 )

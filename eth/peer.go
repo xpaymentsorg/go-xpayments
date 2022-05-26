@@ -37,9 +37,11 @@ var (
 )
 
 const (
-	maxKnownTxs      = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownBlocks   = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
-	handshakeTimeout = 5 * time.Second
+	maxKnownTxs        = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownOrderTxs   = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownLendingTxs = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownBlocks     = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
+	handshakeTimeout   = 5 * time.Second
 )
 
 // PeerInfo represents a short summary of the Ethereum sub-protocol metadata known
@@ -64,20 +66,24 @@ type peer struct {
 	td   *big.Int
 	lock sync.RWMutex
 
-	knownTxs    mapset.Set // Set of transaction hashes known to be known by this peer
-	knownBlocks mapset.Set // Set of block hashes known to be known by this peer
+	knownTxs        mapset.Set // Set of transaction hashes known to be known by this peer
+	knownBlocks     mapset.Set // Set of block hashes known to be known by this peer
+	knownOrderTxs   mapset.Set // Set of order transaction hashes known to be known by this peer
+	knownLendingTxs mapset.Set // Set of lending transaction hashes known to be known by this peer
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
-		Peer:        p,
-		rw:          rw,
-		version:     version,
-		id:          fmt.Sprintf("%x", id[:8]),
-		knownTxs:    mapset.NewSet(),
-		knownBlocks: mapset.NewSet(),
+		Peer:            p,
+		rw:              rw,
+		version:         version,
+		id:              fmt.Sprintf("%x", id[:8]),
+		knownTxs:        mapset.NewSet(),
+		knownBlocks:     mapset.NewSet(),
+		knownOrderTxs:   mapset.NewSet(),
+		knownLendingTxs: mapset.NewSet(),
 	}
 }
 
@@ -131,6 +137,26 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 	p.knownTxs.Add(hash)
 }
 
+// OrderMarkTransaction marks a order transaction as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkOrderTransaction(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known transaction hash
+	for p.knownOrderTxs.Cardinality() >= maxKnownOrderTxs {
+		p.knownOrderTxs.Pop()
+	}
+	p.knownOrderTxs.Add(hash)
+}
+
+// MarkLendingTransaction marks a lending transaction as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkLendingTransaction(hash common.Hash) {
+	// If we reached the memory allowance, drop a previously known transaction hash
+	for p.knownLendingTxs.Cardinality() >= maxKnownLendingTxs {
+		p.knownLendingTxs.Pop()
+	}
+	p.knownLendingTxs.Add(hash)
+}
+
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
@@ -138,6 +164,24 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 		p.knownTxs.Add(tx.Hash())
 	}
 	return p2p.Send(p.rw, TxMsg, txs)
+}
+
+// SendTransactions sends transactions to the peer and includes the hashes
+// in its transaction hash set for future reference.
+func (p *peer) SendOrderTransactions(txs types.OrderTransactions) error {
+	for _, tx := range txs {
+		p.knownOrderTxs.Add(tx.Hash())
+	}
+	return p2p.Send(p.rw, OrderTxMsg, txs)
+}
+
+// SendTransactions sends transactions to the peer and includes the hashes
+// in its transaction hash set for future reference.
+func (p *peer) SendLendingTransactions(txs types.LendingTransactions) error {
+	for _, tx := range txs {
+		p.knownLendingTxs.Add(tx.Hash())
+	}
+	return p2p.Send(p.rw, LendingTxMsg, txs)
 }
 
 // SendNewBlockHashes announces the availability of a number of blocks through
@@ -436,6 +480,36 @@ func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		if !p.knownTxs.Contains(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// PeersWithoutTx retrieves a list of peers that do not have a given transaction
+// in their set of known hashes.
+func (ps *peerSet) OrderPeersWithoutTx(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownOrderTxs.Contains(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// LendingPeersWithoutTx retrieves a list of peers that do not have a given transaction
+// in their set of known hashes.
+func (ps *peerSet) LendingPeersWithoutTx(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownLendingTxs.Contains(hash) {
 			list = append(list, p)
 		}
 	}

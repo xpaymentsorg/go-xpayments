@@ -17,16 +17,17 @@
 package api
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+
+	"bytes"
+	"mime"
+	"path/filepath"
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common"

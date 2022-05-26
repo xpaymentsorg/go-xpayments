@@ -31,33 +31,32 @@ import (
 )
 
 const (
-	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0"
+	ipcAPIs  = "XPSx:1.0 XPSxlending:1.0 XPoS:1.0 admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0"
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
 // Tests that a node embedded within a console can be started up properly and
 // then terminated by closing the input stream.
 func TestConsoleWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xps8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
 	// Start a gpay console, make sure it's cleaned up and terminate the console
-	gpay := rungpay(t,
+	Gpay := runGpay(t,
+		"--XPSx.datadir", tmpdir(t)+"XPSx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase,
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
-	gpay.SetTemplateFunc("goos", func() string { return runtime.GOOS })
-	gpay.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
-	gpay.SetTemplateFunc("gover", runtime.Version)
-	gpay.SetTemplateFunc("gpayver", func() string { return params.Version })
-	gpay.SetTemplateFunc("niltime", func() string {
-		return time.Unix(0, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
-	})
-	gpay.SetTemplateFunc("apis", func() string { return ipcAPIs })
+	Gpay.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	Gpay.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	Gpay.SetTemplateFunc("gover", runtime.Version)
+	Gpay.SetTemplateFunc("gpayver", func() string { return params.Version })
+	Gpay.SetTemplateFunc("niltime", func() string { return time.Unix(1544771829, 0).Format(time.RFC1123) })
+	Gpay.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
-	gpay.Expect(`
+	Gpay.Expect(`
 Welcome to the gpay JavaScript console!
 
 instance: gpay/v{{gpayver}}/{{goos}}-{{goarch}}/{{gover}}
@@ -68,13 +67,13 @@ at block: 0 ({{niltime}})
 
 > {{.InputLine "exit"}}
 `)
-	gpay.ExpectExit()
+	Gpay.ExpectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
 func TestIPCAttachWelcome(t *testing.T) {
 	// Configure the instance for IPC attachement
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xps8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
 		ipc = `\\.\pipe\gpay` + strconv.Itoa(trulyRandInt(100000, 999999))
@@ -83,49 +82,52 @@ func TestIPCAttachWelcome(t *testing.T) {
 		defer os.RemoveAll(ws)
 		ipc = filepath.Join(ws, "gpay.ipc")
 	}
-	gpay := rungpay(t,
+	Gpay := runGpay(t,
+		"--XPSx.datadir", tmpdir(t)+"XPSx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, gpay, "ipc:"+ipc, ipcAPIs)
+	testAttachWelcome(t, Gpay, "ipc:"+ipc, ipcAPIs)
 
-	gpay.Interrupt()
-	gpay.ExpectExit()
+	Gpay.Interrupt()
+	Gpay.ExpectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xps8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
-	gpay := rungpay(t,
+	Gpay := runGpay(t,
+		"--XPSx.datadir", tmpdir(t)+"XPSx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, gpay, "http://localhost:"+port, httpAPIs)
+	testAttachWelcome(t, Gpay, "http://localhost:"+port, httpAPIs)
 
-	gpay.Interrupt()
-	gpay.ExpectExit()
+	Gpay.Interrupt()
+	Gpay.ExpectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	coinbase := "xps8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
-	gpay := rungpay(t,
+	Gpay := runGpay(t,
+		"--XPSx.datadir", tmpdir(t)+"XPSx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, gpay, "ws://localhost:"+port, httpAPIs)
+	testAttachWelcome(t, Gpay, "ws://localhost:"+port, httpAPIs)
 
-	gpay.Interrupt()
-	gpay.ExpectExit()
+	Gpay.Interrupt()
+	Gpay.ExpectExit()
 }
 
-func testAttachWelcome(t *testing.T, gpay *testgpay, endpoint, apis string) {
+func testAttachWelcome(t *testing.T, Gpay *testGpay, endpoint, apis string) {
 	// Attach to a running gpay note and terminate immediately
-	attach := rungpay(t, "attach", endpoint)
+	attach := runGpay(t, "attach", endpoint)
 	defer attach.ExpectExit()
 	attach.CloseStdin()
 
@@ -134,12 +136,10 @@ func testAttachWelcome(t *testing.T, gpay *testgpay, endpoint, apis string) {
 	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.SetTemplateFunc("gover", runtime.Version)
 	attach.SetTemplateFunc("gpayver", func() string { return params.Version })
-	attach.SetTemplateFunc("etherbase", func() string { return gpay.Etherbase })
-	attach.SetTemplateFunc("niltime", func() string {
-		return time.Unix(0, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
-	})
+	attach.SetTemplateFunc("etherbase", func() string { return Gpay.Etherbase })
+	attach.SetTemplateFunc("niltime", func() string { return time.Unix(1544771829, 0).Format(time.RFC1123) })
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.SetTemplateFunc("datadir", func() string { return gpay.Datadir })
+	attach.SetTemplateFunc("datadir", func() string { return Gpay.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })
 
 	// Verify the actual welcome message to the required template

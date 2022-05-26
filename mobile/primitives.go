@@ -16,7 +16,7 @@
 
 // Contains various wrappers for primitive types.
 
-package gpay
+package geth
 
 import (
 	"errors"

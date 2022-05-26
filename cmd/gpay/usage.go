@@ -22,8 +22,6 @@ import (
 	"io"
 	"sort"
 
-	"strings"
-
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"gopkg.in/urfave/cli.v1"
@@ -33,7 +31,7 @@ import (
 var AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
 
-   Copyright (c) 2021-2022 xPaymentsChain
+   Copyright (c) 2022 xPayments
 
 USAGE:
    {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
@@ -65,14 +63,15 @@ type flagGroup struct {
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flagGroup{
 	{
-		Name: "xPaymentsChain",
+		Name: "XPAYMENTS",
 		Flags: []cli.Flag{
 			configFileFlag,
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			//utils.NoUSBFlag,
 			utils.NetworkIdFlag,
-			utils.BerylliumFlag,
+			//utils.TestnetFlag,
+			//utils.RinkebyFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
@@ -283,9 +282,6 @@ func init() {
 			uncategorized := []cli.Flag{}
 			for _, flag := range data.(*cli.App).Flags {
 				if _, ok := categorized[flag.String()]; !ok {
-					if strings.HasPrefix(flag.GetName(), "dashboard") {
-						continue
-					}
 					uncategorized = append(uncategorized, flag)
 				}
 			}

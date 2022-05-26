@@ -19,9 +19,14 @@ package core
 import (
 	"fmt"
 
+	"github.com/xpaymentsorg/go-xpayments/XPSx/tradingstate"
+	"github.com/xpaymentsorg/go-xpayments/XPSxlending/lendingstate"
+	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
@@ -50,10 +55,10 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
-	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+	if v.bc.HasBlockAndFullState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
 	}
-	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+	if !v.bc.HasBlockAndFullState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
 			return consensus.ErrUnknownAncestor
 		}
@@ -101,6 +106,77 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	return nil
 }
 
+func (v *BlockValidator) ValidateTradingOrder(statedb *state.StateDB, XPSxStatedb *tradingstate.TradingStateDB, txMatchBatch tradingstate.TxMatchBatch, coinbase common.Address, header *types.Header) error {
+	XPoSEngine, ok := v.bc.Engine().(*XPoS.XPoS)
+	if XPoSEngine == nil || !ok {
+		return ErrNotXPoS
+	}
+	XPSXService := XPoSEngine.GetXPSXService()
+	if XPSXService == nil {
+		return fmt.Errorf("XPSx not found")
+	}
+	log.Debug("verify matching transaction found a TxMatches Batch", "numTxMatches", len(txMatchBatch.Data))
+	tradingResult := map[common.Hash]tradingstate.MatchingResult{}
+	for _, txMatch := range txMatchBatch.Data {
+		// verify orderItem
+		order, err := txMatch.DecodeOrder()
+		if err != nil {
+			log.Error("transaction match is corrupted. Failed decode order", "err", err)
+			continue
+		}
+
+		log.Debug("process tx match", "order", order)
+		// process Matching Engine
+		newTrades, newRejectedOrders, err := XPSXService.ApplyOrder(header, coinbase, v.bc, statedb, XPSxStatedb, tradingstate.GetTradingOrderBookHash(order.BaseToken, order.QuoteToken), order)
+		if err != nil {
+			return err
+		}
+		tradingResult[tradingstate.GetMatchingResultCacheKey(order)] = tradingstate.MatchingResult{
+			Trades:  newTrades,
+			Rejects: newRejectedOrders,
+		}
+	}
+	if XPSXService.IsSDKNode() {
+		v.bc.AddMatchingResult(txMatchBatch.TxHash, tradingResult)
+	}
+	return nil
+}
+
+func (v *BlockValidator) ValidateLendingOrder(statedb *state.StateDB, lendingStateDb *lendingstate.LendingStateDB, XPSxStatedb *tradingstate.TradingStateDB, batch lendingstate.TxLendingBatch, coinbase common.Address, header *types.Header) error {
+	XPoSEngine, ok := v.bc.Engine().(*XPoS.XPoS)
+	if XPoSEngine == nil || !ok {
+		return ErrNotXPoS
+	}
+	XPSXService := XPoSEngine.GetXPSXService()
+	if XPSXService == nil {
+		return fmt.Errorf("XPSx not found")
+	}
+	lendingService := XPoSEngine.GetLendingService()
+	if lendingService == nil {
+		return fmt.Errorf("lendingService not found")
+	}
+	log.Debug("verify lendingItem ", "numItems", len(batch.Data))
+	lendingResult := map[common.Hash]lendingstate.MatchingResult{}
+	for _, l := range batch.Data {
+		// verify lendingItem
+
+		log.Debug("process lending tx", "lendingItem", lendingstate.ToJSON(l))
+		// process Matching Engine
+		newTrades, newRejectedOrders, err := lendingService.ApplyOrder(header, coinbase, v.bc, statedb, lendingStateDb, XPSxStatedb, lendingstate.GetLendingOrderBookHash(l.LendingToken, l.Term), l)
+		if err != nil {
+			return err
+		}
+		lendingResult[lendingstate.GetLendingCacheKey(l)] = lendingstate.MatchingResult{
+			Trades:  newTrades,
+			Rejects: newRejectedOrders,
+		}
+	}
+	if XPSXService.IsSDKNode() {
+		v.bc.AddLendingResult(batch.TxHash, lendingResult)
+	}
+	return nil
+}
+
 // CalcGasLimit computes the gas limit of the next block after parent.
 // This is miner strategy, not consensus protocol.
 func CalcGasLimit(parent *types.Block) uint64 {
@@ -130,4 +206,52 @@ func CalcGasLimit(parent *types.Block) uint64 {
 		}
 	}
 	return limit
+}
+
+func ExtractTradingTransactions(transactions types.Transactions) ([]tradingstate.TxMatchBatch, error) {
+	txMatchBatchData := []tradingstate.TxMatchBatch{}
+	for _, tx := range transactions {
+		if tx.IsTradingTransaction() {
+			txMatchBatch, err := tradingstate.DecodeTxMatchesBatch(tx.Data())
+			if err != nil {
+				log.Error("transaction match is corrupted. Failed to decode txMatchBatch", "err", err, "txHash", tx.Hash().Hex())
+				continue
+			}
+			txMatchBatch.TxHash = tx.Hash()
+			txMatchBatchData = append(txMatchBatchData, txMatchBatch)
+		}
+	}
+	return txMatchBatchData, nil
+}
+
+func ExtractLendingTransactions(transactions types.Transactions) ([]lendingstate.TxLendingBatch, error) {
+	batchData := []lendingstate.TxLendingBatch{}
+	for _, tx := range transactions {
+		if tx.IsLendingTransaction() {
+			txMatchBatch, err := lendingstate.DecodeTxLendingBatch(tx.Data())
+			if err != nil {
+				log.Error("transaction match is corrupted. Failed to decode lendingTransaction", "err", err, "txHash", tx.Hash().Hex())
+				continue
+			}
+			txMatchBatch.TxHash = tx.Hash()
+			batchData = append(batchData, txMatchBatch)
+		}
+	}
+	return batchData, nil
+}
+
+func ExtractLendingFinalizedTradeTransactions(transactions types.Transactions) (lendingstate.FinalizedResult, error) {
+	for _, tx := range transactions {
+		if tx.IsLendingFinalizedTradeTransaction() {
+			finalizedTrades, err := lendingstate.DecodeFinalizedResult(tx.Data())
+			if err != nil {
+				log.Error("transaction is corrupted. Failed to decode LendingClosedTradeTransaction", "err", err, "txHash", tx.Hash().Hex())
+				continue
+			}
+			finalizedTrades.TxHash = tx.Hash()
+			// each block has only one tx of this type
+			return finalizedTrades, nil
+		}
+	}
+	return lendingstate.FinalizedResult{}, nil
 }

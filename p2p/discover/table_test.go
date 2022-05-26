@@ -20,9 +20,10 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
+	"sync"
+
 	"net"
 	"reflect"
-	"sync"
 	"testing"
 	"testing/quick"
 	"time"

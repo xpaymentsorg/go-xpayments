@@ -231,7 +231,7 @@ func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*en
 
 // detectEnsAddr determines the ENS contract address by getting both the
 // version and genesis hash using the client and matching them to either
-// mainnet or beryllium addresses
+// mainnet or testnet addresses
 func detectEnsAddr(client *rpc.Client) (common.Address, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -252,8 +252,8 @@ func detectEnsAddr(client *rpc.Client) (common.Address, error) {
 		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
 		return ens.MainNetAddress, nil
 
-	case version == "3" && block.Hash() == params.BerylliumGenesisHash:
-		log.Info("using Beryllium ENS contract address", "addr", ens.TestNetAddress)
+	case version == "3" && block.Hash() == params.TestnetGenesisHash:
+		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
 		return ens.TestNetAddress, nil
 
 	default:
@@ -339,6 +339,9 @@ func (self *Swarm) updateGauges() {
 	dbSizeGauge.Update(int64(self.lstore.DbCounter()))
 	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
 	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
+}
+
+func (self *Swarm) SaveData() {
 }
 
 // implements the node.Service interface

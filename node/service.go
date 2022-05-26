@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/xpaymentsorg/go-xpayments/accounts"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
@@ -41,9 +42,9 @@ type ServiceContext struct {
 // node is an ephemeral one, a memory database is returned.
 func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (ethdb.Database, error) {
 	if ctx.config.DataDir == "" {
-		return ethdb.NewMemDatabase()
+		return rawdb.NewMemoryDatabase(), nil
 	}
-	db, err := ethdb.NewLDBDatabase(ctx.config.resolvePath(name), cache, handles)
+	db, err := rawdb.NewLevelDBDatabase(ctx.config.resolvePath(name), cache, handles, "")
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,8 @@ type Service interface {
 	// Start is called after all services have been constructed and the networking
 	// layer was also initialized to spawn any goroutines required by the service.
 	Start(server *p2p.Server) error
-
+	//Save data before stop
+	SaveData()
 	// Stop terminates all goroutines belonging to the service, blocking until they
 	// are all terminated.
 	Stop() error

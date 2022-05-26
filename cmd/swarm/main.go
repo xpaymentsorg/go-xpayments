@@ -32,7 +32,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	prompt_console "github.com/xpaymentsorg/go-xpayments/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/console"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/ethclient"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
@@ -405,9 +405,9 @@ func bzzd(ctx *cli.Context) error {
 	}
 
 	cfg := defaultNodeConfig
-	//XDC only supports --datadir via command line
+	//XPS only supports --datadir via command line
 	//in order to be consistent within swarm, if we pass --datadir via environment variable
-	//or via config file, we get the same directory for XDC and swarm
+	//or via config file, we get the same directory for XPS and swarm
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
@@ -534,7 +534,7 @@ func getPassPhrase(prompt string, i int, passwords []string) string {
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
-	password, err := prompt_console.Stdin.PromptPassword("Passphrase: ")
+	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
 	}

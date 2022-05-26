@@ -43,7 +43,7 @@ func TestIsHexAddress(t *testing.T) {
 		{"xps5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
 		{"5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
 		{"XPS5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
-		{"xpsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
+		{"XpsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
 		{"xpsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
 		{"xps5aaeb6053f3e94c9b9a09f33669435e7ef1beaed1", false},
 		{"xps5aaeb6053f3e94c9b9a09f33669435e7ef1beae", false},
@@ -149,7 +149,7 @@ func TestAddressHexChecksum(t *testing.T) {
 }
 
 func BenchmarkAddressHex(b *testing.B) {
-	testAddr := HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
+	testAddr := HexToAddress("0xps5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
 	for n := 0; n < b.N; n++ {
 		testAddr.Hex()
 	}

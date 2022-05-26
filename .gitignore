@@ -14,7 +14,7 @@
 */**/*tx_database*
 */**/*dapps*
 build/_vendor/pkg
-
+/devnet
 #*
 .#*
 *#
@@ -25,7 +25,7 @@ build/_vendor/pkg
 # used by the Makefile
 /build/_workspace/
 /build/bin/
-/XPS*.zip
+/XDC*.zip
 
 # travis
 profile.tmp
@@ -48,3 +48,5 @@ profile.cov
 /dashboard/assets/package-lock.json
 
 **/yarn-error.log
+coverage.txt
+go.sum

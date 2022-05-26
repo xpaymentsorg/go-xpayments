@@ -29,8 +29,8 @@ import (
 	"testing/quick"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	check "gopkg.in/check.v1"
 )
 
@@ -38,7 +38,7 @@ import (
 // actually committing the state.
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
-	db, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	// Update it with some accounts
@@ -55,8 +55,10 @@ func TestUpdateLeaks(t *testing.T) {
 		state.IntermediateRoot(false)
 	}
 	// Ensure that no data was leaked into the database
-	for _, key := range db.Keys() {
-		value, _ := db.Get(key)
+	it := db.NewIterator(nil, nil)
+	for it.Next() {
+		key := it.Key()
+		value := it.Value()
 		t.Errorf("State leaked into database: %x -> %x", key, value)
 	}
 }
@@ -65,8 +67,8 @@ func TestUpdateLeaks(t *testing.T) {
 // only the one right before the commit.
 func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
-	transDb, _ := ethdb.NewMemDatabase()
-	finalDb, _ := ethdb.NewMemDatabase()
+	transDb := rawdb.NewMemoryDatabase()
+	finalDb := rawdb.NewMemoryDatabase()
 	transState, _ := New(common.Hash{}, NewDatabase(transDb))
 	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
@@ -102,13 +104,17 @@ func TestIntermediateLeaks(t *testing.T) {
 	if _, err := finalState.Commit(false); err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
-	for _, key := range finalDb.Keys() {
+	it := finalDb.NewIterator(nil, nil)
+	for it.Next() {
+		key := it.Key()
 		if _, err := transDb.Get(key); err != nil {
 			val, _ := finalDb.Get(key)
 			t.Errorf("entry missing from the transition database: %x -> %x", key, val)
 		}
 	}
-	for _, key := range transDb.Keys() {
+	it = transDb.NewIterator(nil, nil)
+	for it.Next() {
+		key := it.Key()
 		if _, err := finalDb.Get(key); err != nil {
 			val, _ := transDb.Get(key)
 			t.Errorf("extra entry in the transition database: %x -> %x", key, val)
@@ -121,7 +127,7 @@ func TestIntermediateLeaks(t *testing.T) {
 // https://github.com/xpaymentsorg/go-xpayments/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	db, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
 	orig, _ := New(common.Hash{}, NewDatabase(db))
 
 	for i := byte(0); i < 255; i++ {
@@ -333,7 +339,7 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		db, _        = ethdb.NewMemDatabase()
+		db           = rawdb.NewMemoryDatabase()
 		state, _     = New(common.Hash{}, NewDatabase(db))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0

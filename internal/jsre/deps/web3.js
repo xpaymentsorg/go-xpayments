@@ -1021,7 +1021,7 @@ var formatOutputInt = function (param) {
     var value = param.staticPart() || "0";
 
     // check if it's negative number
-    // it is, return two's complement
+    // it it is, return two's complement
     if (signedIsNegative(value)) {
         return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
     }
@@ -2193,7 +2193,7 @@ var toWei = function(number, unit) {
 };
 
 /**
- * Takes an input and transforms it into a bignumber
+ * Takes an input and transforms it into an bignumber
  *
  * @method toBigNumber
  * @param {Number|String|BigNumber} a number, string, HEX string or BigNumber
@@ -2231,7 +2231,7 @@ var toTwosComplement = function (number) {
  * Checks if the given string is strictly an address
  *
  * @method isStrictAddress
- * @param {String} address the given HEX address
+ * @param {String} address the given HEX adress
  * @return {Boolean}
 */
 var isStrictAddress = function (address) {
@@ -2242,7 +2242,7 @@ var isStrictAddress = function (address) {
  * Checks if the given string is an address
  *
  * @method isAddress
- * @param {String} address the given HEX address
+ * @param {String} address the given HEX adress
  * @return {Boolean}
 */
 var isAddress = function (address) {
@@ -2250,7 +2250,7 @@ var isAddress = function (address) {
         // check if it has the basic requirements of an address
         return false;
     } else if (/^(0x)?[0-9a-f]{40}$/.test(address) || /^(0x)?[0-9A-F]{40}$/.test(address)) {
-        // If it's all small caps or all caps, return true
+        // If it's all small caps or all all caps, return true
         return true;
     } else {
         // Otherwise check each case
@@ -2262,7 +2262,7 @@ var isAddress = function (address) {
  * Checks if the given string is a checksummed address
  *
  * @method isChecksumAddress
- * @param {String} address the given HEX address
+ * @param {String} address the given HEX adress
  * @return {Boolean}
 */
 var isChecksumAddress = function (address) {
@@ -2285,7 +2285,7 @@ var isChecksumAddress = function (address) {
  * Makes a checksum address
  *
  * @method toChecksumAddress
- * @param {String} address the given HEX address
+ * @param {String} address the given HEX adress
  * @return {String}
 */
 var toChecksumAddress = function (address) {
@@ -3003,7 +3003,7 @@ var ContractFactory = function (eth, abi) {
 
         if (callback) {
 
-            // wait for the contract address and check if the code was deployed
+            // wait for the contract address adn check if the code was deployed
             this.eth.sendTransaction(options, function (err, hash) {
                 if (err) {
                     callback(err);
@@ -3056,7 +3056,7 @@ ContractFactory.prototype.at = function (address, callback) {
     var contract = new Contract(this.eth, this.abi, address);
 
     // this functions are not part of prototype,
-    // because we don't want to spoil the interface
+    // because we dont want to spoil the interface
     addFunctionsToContract(contract);
     addEventsToContract(contract);
 
@@ -3715,6 +3715,13 @@ var inputBlockNumberFormatter = function (blockNumber) {
     return utils.toHex(blockNumber);
 };
 
+var inputEpochNumberFormatter = function (epochNumber) {
+  if (epochNumber === undefined || epochNumber === "latest") {
+    return "latest";
+  }
+  return utils.toHex(epochNumber);
+};
+
 /**
  * Formats the input of a transaction and converts all values to HEX
  *
@@ -3840,6 +3847,22 @@ var outputBlockFormatter = function(block) {
 
     return block;
 };
+/**
+ * Formats the output of a blockSigner list
+ *
+ * @method outputBlockFormatter
+ * @param {Object} blockSigners
+ * @returns {Object}
+ */
+var outputBlockSignersFormatter = function(blockSigners) {
+  if (utils.isArray(blockSigners)) {
+    blockSigners.forEach(function(item){
+      if(!utils.isString(item))
+        return formatOutputAddress(item);
+    });
+  }
+  return blockSigners;
+};
 
 /**
  * Formats the output of a log
@@ -3919,6 +3942,9 @@ var outputPostFormatter = function(post){
 };
 
 var inputAddressFormatter = function (address) {
+    if (address.substring(0,3) === "xdc") {
+        address = "0x" + address.substring(3);
+    }
     var iban = new Iban(address);
     if (iban.isValid() && iban.isDirect()) {
         return '0x' + iban.address();
@@ -3950,6 +3976,7 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    inputEpochNumberFormatter: inputEpochNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
@@ -3958,6 +3985,7 @@ module.exports = {
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
+    outputBlockSignersFormatter: outputBlockSignersFormatter,
     outputLogFormatter: outputLogFormatter,
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter
@@ -5210,6 +5238,18 @@ var blockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockByHash" : "eth_getBlockByNumber";
 };
 
+var blockSignersCall = function (args) {
+  return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockSignersByHash" : "eth_getBlockSignersByNumber";
+};
+
+var stakerROICall = function (args) {
+  return utils.isString(args[0]) && args[0].indexOf('0x') === 0 ? "eth_getStakerROIMasternode" : "eth_getStakerROI";
+};
+
+var blockFinalityCall = function (args) {
+  return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockFinalityByHash" : "eth_getBlockFinalityByNumber";
+};
+
 var transactionFromBlockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionByBlockHashAndIndex' : 'eth_getTransactionByBlockNumberAndIndex';
 };
@@ -5297,6 +5337,32 @@ var methods = function () {
         outputFormatter: formatters.outputBlockFormatter
     });
 
+    var getBlockSigners = new Method({
+      name: 'getBlockSigners',
+      call: blockSignersCall,
+      params: 1,
+      inputFormatter: [formatters.inputBlockNumberFormatter],
+      outputFormatter: formatters.outputBlockSignersFormatter
+    });
+
+    var getStakerROI = new Method({
+        name: 'getStakerROI',
+        call: stakerROICall,
+        params: 1,
+        inputFormatter: [function(val) {
+            return val ? formatters.inputAddressFormatter(val) : null
+        }],
+        outputFormatter: formatters.formatOutputReal
+    });
+
+    var getBlockFinality = new Method({
+      name: 'getBlockFinality',
+      call: blockFinalityCall,
+      params: 1,
+      inputFormatter: [formatters.inputBlockNumberFormatter],
+      outputFormatter: formatters.formatOutputInt
+    });
+
     var getUncle = new Method({
         name: 'getUncle',
         call: uncleCall,
@@ -5357,7 +5423,7 @@ var methods = function () {
         inputFormatter: [null, formatters.inputDefaultBlockNumberFormatter],
         outputFormatter: utils.toDecimal
     });
-
+    
     var sendRawTransaction = new Method({
         name: 'sendRawTransaction',
         call: 'eth_sendRawTransaction',
@@ -5431,11 +5497,28 @@ var methods = function () {
         params: 0
     });
 
+    var getCandidateStatus = new Method({
+      name: 'getCandidateStatus',
+      call: 'eth_getCandidateStatus',
+      params: 2,
+      inputFormatter: [formatters.inputAddressFormatter, formatters.inputEpochNumberFormatter]
+    });
+    var getCandidates = new Method({
+        name: 'getCandidates',
+        call: 'eth_getCandidates',
+        params: 1,
+        inputFormatter: [formatters.inputEpochNumberFormatter]
+      });
     return [
         getBalance,
         getStorageAt,
         getCode,
         getBlock,
+        getBlockSigners,
+        getStakerROI,
+        getBlockFinality,
+        getCandidates,
+        getCandidateStatus,
         getUncle,
         getCompilers,
         getBlockTransactionCount,
@@ -5862,7 +5945,7 @@ module.exports = Shh;
  * @author Alex Beregszaszi <alex@rtfs.hu>
  * @date 2016
  *
- * Reference: https://github.com/ethereum/go-ethereum/blob/swarm/internal/web3ext/web3ext.go#L33
+ * Reference: https://github.com/XinFinOrg/XDPoSChain/blob/swarm/internal/web3ext/web3ext.go#L33
  */
 
 "use strict";
@@ -6092,7 +6175,7 @@ var shh = function () {
 
 module.exports = {
     eth: eth,
-    shh: shh
+    shh: shh,
 };
 
 
@@ -6735,7 +6818,7 @@ var transferToAddress = function (eth, from, to, value, callback) {
  * @method deposit
  * @param {String} from
  * @param {String} to
- * @param {Value} value to be transferred
+ * @param {Value} value to be transfered
  * @param {String} client unique identifier
  * @param {Function} callback, callback
  */
@@ -13617,7 +13700,7 @@ module.exports = BigNumber; // jshint ignore:line
 },{}],"web3":[function(require,module,exports){
 var Web3 = require('./lib/web3');
 
-// don't override global variable
+// dont override global variable
 if (typeof window !== 'undefined' && typeof window.Web3 === 'undefined') {
     window.Web3 = Web3;
 }

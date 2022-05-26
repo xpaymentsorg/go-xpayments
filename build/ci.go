@@ -58,7 +58,7 @@ var (
 		executablePath("abigen"),
 		executablePath("bootnode"),
 		executablePath("evm"),
-		executablePath("gpay"),
+		executablePath("geth"),
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("swarm"),
@@ -115,9 +115,9 @@ func doInstall(cmdline []string) {
 		var minor int
 		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
 
-		if minor < 13 {
+		if minor < 9 {
 			log.Println("You have Go version", runtime.Version())
-			log.Println("gpay requires at least Go version 1.13 and cannot")
+			log.Println("XPS requires at least Go version 1.9 and cannot")
 			log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
 			os.Exit(1)
 		}
@@ -127,7 +127,7 @@ func doInstall(cmdline []string) {
 	if flag.NArg() > 0 {
 		packages = flag.Args()
 	}
-	packages = build.ExpandPackagesNoVendor(packages)
+	// packages = build.ExpandPackagesNoVendor(packages)
 
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
@@ -215,35 +215,39 @@ func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd
 // "tests" also includes static analysis tools such as vet.
 
 func doTest(cmdline []string) {
-	var (
-		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
-	)
+	coverage := flag.Bool("coverage", false, "Whether to record code coverage")
+	verbose := flag.Bool("v", false, "Whether to log verbosely")
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
-	packages := []string{"./..."}
+	packages := []string{"./..."} // if a package has no test files, the lines in that package are not added to the total line count
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
+	} else {
+		// added all files in all packages (except vendor) to coverage report files count, even there is no test file in the package
+		packages = build.ExpandPackagesNoVendor(packages)
 	}
-	packages = build.ExpandPackagesNoVendor(packages)
 
 	// Run analysis tools before the tests.
-	build.MustRun(goTool("vet", packages...))
+	// build.MustRun(goTool("vet", packages...))
 
 	// Run the actual tests.
-	gotest := goTool("test", buildFlags(env)...)
+	// gotest := goTool("test", buildFlags(env)...)
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
+	gotest := goTool("test", buildFlags(env)...)
 	gotest.Args = append(gotest.Args, "-p", "1")
 	if *coverage {
-		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
+		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover", "-coverprofile=coverage.txt")
+	}
+	if *verbose {
+		gotest.Args = append(gotest.Args, "-v")
 	}
 
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
 }
 
-// runs gometalinter on requested packages
 func doLint(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 
@@ -251,13 +255,12 @@ func doLint(cmdline []string) {
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
-	// Get metalinter and install all supported linters
-	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v2"))
-	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), "--install")
+	// Get golangci-lint and install all supported linters
+	build.MustRun(goTool("get", "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.18.0"))
 
 	// Run fast linters batched together
 	configs := []string{
-		"--vendor",
+		"run",
 		"--disable-all",
 		"--enable=vet",
 		"--enable=gofmt",
@@ -265,12 +268,12 @@ func doLint(cmdline []string) {
 		"--enable=goconst",
 		"--min-occurrences=6", // for goconst
 	}
-	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), append(configs, packages...)...)
+	build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
 
 	// Run slow linters one by one
 	for _, linter := range []string{"unconvert", "gosimple"} {
 		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
-		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), append(configs, packages...)...)
+		build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
 	}
 }
 

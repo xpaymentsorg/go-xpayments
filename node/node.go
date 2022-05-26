@@ -28,6 +28,7 @@ import (
 
 	"github.com/prometheus/prometheus/util/flock"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
@@ -482,6 +483,9 @@ func (n *Node) Stop() error {
 		return ErrNodeStopped
 	}
 
+	for _, service := range n.services {
+		service.SaveData()
+	}
 	// Terminate the API, services and the p2p server.
 	n.stopWS()
 	n.stopHTTP()
@@ -641,11 +645,11 @@ func (n *Node) EventMux() *event.TypeMux {
 // OpenDatabase opens an existing database with the given name (or creates one if no
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
-func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, error) {
+func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
 	if n.config.DataDir == "" {
-		return ethdb.NewMemDatabase()
+		return rawdb.NewMemoryDatabase(), nil
 	}
-	return ethdb.NewLDBDatabase(n.config.resolvePath(name), cache, handles)
+	return rawdb.NewLevelDBDatabase(n.config.resolvePath(name), cache, handles, namespace)
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.

@@ -23,8 +23,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/swarm/testutil"
 	"golang.org/x/net/html"
+
+	"github.com/xpaymentsorg/go-xpayments/swarm/testutil"
 )
 
 func TestError(t *testing.T) {

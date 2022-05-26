@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -16,8 +16,11 @@
 package XPoS
 
 import (
+	"math/big"
+
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS/utils"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
@@ -28,9 +31,17 @@ type API struct {
 	chain consensus.ChainReader
 	XPoS  *XPoS
 }
+type NetworkInformation struct {
+	NetworkId                  *big.Int
+	XPSValidatorAddress        common.Address
+	RelayerRegistrationAddress common.Address
+	XPSXListingAddress         common.Address
+	XPSZAddress                common.Address
+	LendingAddress             common.Address
+}
 
 // GetSnapshot retrieves the state snapshot at a given block.
-func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
+func (api *API) GetSnapshot(number *rpc.BlockNumber) (*utils.PublicApiSnapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
@@ -40,18 +51,18 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	}
 	// Ensure we have an actually valid block and return its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	return api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XPoS.GetSnapshot(api.chain, header)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
-func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
+func (api *API) GetSnapshotAtHash(hash common.Hash) (*utils.PublicApiSnapshot, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	return api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XPoS.GetSnapshot(api.chain, header)
 }
 
 // GetSigners retrieves the list of authorized signers at the specified block.
@@ -65,36 +76,35 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	}
 	// Ensure we have an actually valid block and return the signers from its snapshot
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	snap, err := api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.GetSigners(), nil
+
+	return api.XPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
 // GetSignersAtHash retrieves the state snapshot at a given block.
 func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
-		return nil, errUnknownBlock
+		return nil, utils.ErrUnknownBlock
 	}
-	snap, err := api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.GetSigners(), nil
+	return api.XPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
-// Proposals returns the current proposals the node tries to uphold and vote on.
-func (api *API) Proposals() map[common.Address]bool {
-	api.XPoS.lock.RLock()
-	defer api.XPoS.lock.RUnlock()
-
-	proposals := make(map[common.Address]bool)
-	for address, auth := range api.XPoS.proposals {
-		proposals[address] = auth
+func (api *API) NetworkInformation() NetworkInformation {
+	info := NetworkInformation{}
+	info.NetworkId = api.chain.Config().ChainId
+	info.XPSValidatorAddress = common.HexToAddress(common.MasternodeVotingSMC)
+	if common.IsTestnet {
+		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMCTestnet)
+		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMCTestnet)
+		info.XPSXListingAddress = common.XPSXListingSMCTestNet
+		info.XPSZAddress = common.TRC21IssuerSMCTestNet
+	} else {
+		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMC)
+		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMC)
+		info.XPSXListingAddress = common.XPSXListingSMC
+		info.XPSZAddress = common.TRC21IssuerSMC
 	}
-	return proposals
+	return info
 }

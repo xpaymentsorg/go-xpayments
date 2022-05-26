@@ -120,8 +120,8 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XPoS.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
-		fmt.Println("How many XPS should be rewarded to masternode? (default = 5000)")
-		genesis.Config.XPoS.Reward = uint64(w.readDefaultInt(5000))
+		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
+		genesis.Config.XPoS.Reward = uint64(w.readDefaultInt(10))
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
@@ -150,7 +150,7 @@ func (w *wizard) makeGenesis() {
 			}
 		}
 		validatorCap := new(big.Int)
-		validatorCap.SetString("10000000000000000000000000", 10)
+		validatorCap.SetString("50000000000000000000000", 10)
 		var validatorCaps []*big.Int
 		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
 		for i, signer := range signers {
@@ -165,17 +165,17 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XPoS.RewardCheckpoint = epochNumber
 
 		fmt.Println()
-		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 5)")
-		genesis.Config.XPoS.Gap = uint64(w.readDefaultInt(5))
+		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 450)")
+		genesis.Config.XPoS.Gap = uint64(w.readDefaultInt(450))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = xps0000000000000000000000000000000000000013)")
+		fmt.Println("What is foundation wallet address? (default = xps0000000000000000000000000000000000000068)")
 		genesis.Config.XPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
-		pKey, _ := crypto.HexToECDSA("887ca2d87631f9ea6d8e7eb2048bb94c0598200a6175b2af56b027c3522ae990") // xps0542ef4e582920cbfbae91a9441a915a43aa1eda
+		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr := crypto.PubkeyToAddress(pKey.PublicKey)
-		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+		contractBackend := backends.NewXPSSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000, params.TestXPoSMockChainConfig)
 		transactOpts := bind.NewKeyedTransactor(pKey)
 
 		validatorAddress, _, err := validatorContract.DeployValidator(transactOpts, contractBackend, signers, validatorCaps, owner)
@@ -229,8 +229,8 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, multiSignWalletAddr, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, multiSignWalletAddr, nil, f)
-		fBalance := big.NewInt(0) // 25 Million
-		fBalance.Add(fBalance, big.NewInt(25*1000*1000))
+		fBalance := big.NewInt(0) // 16m
+		fBalance.Add(fBalance, big.NewInt(16*1000*1000))
 		fBalance.Mul(fBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[common.HexToAddress(common.FoudationAddr)] = core.GenesisAccount{
 			Balance: fBalance,
@@ -296,13 +296,13 @@ func (w *wizard) makeGenesis() {
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, multiSignWalletTeamAddr, nil, f)
 		// Team balance.
-		balance := big.NewInt(0) // 25 Million
-		balance.Add(balance, big.NewInt(25*1000*1000))
+		balance := big.NewInt(0) // 12m
+		balance.Add(balance, big.NewInt(12*1000*1000))
 		balance.Mul(balance, big.NewInt(1000000000000000000))
-		// subBalance := big.NewInt(0) // i * 50k
-		// subBalance.Add(subBalance, big.NewInt(int64(len(signers))*10*1000*1000))
-		// subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
-		// balance.Sub(balance, subBalance) // 12m - i * 50k
+		subBalance := big.NewInt(0) // i * 50k
+		subBalance.Add(subBalance, big.NewInt(int64(len(signers))*50*1000))
+		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
+		balance.Sub(balance, subBalance) // 12m - i * 50k
 		genesis.Alloc[common.HexToAddress(common.TeamAddr)] = core.GenesisAccount{
 			Balance: balance,
 			Code:    code,
@@ -310,10 +310,10 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("What is swap wallet address for fund 450Million XPS?")
+		fmt.Println("What is swap wallet address for fund 55m XPS?")
 		swapAddr := *w.readAddress()
-		baseBalance := big.NewInt(0) // 450Million
-		baseBalance.Add(baseBalance, big.NewInt(45000*1000*10))
+		baseBalance := big.NewInt(0) // 55m
+		baseBalance.Add(baseBalance, big.NewInt(55*1000*1000))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[swapAddr] = core.GenesisAccount{
 			Balance: baseBalance,

@@ -21,15 +21,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"reflect"
 	"strings"
 	"unicode"
 
 	"github.com/naoina/toml"
+	"github.com/xpaymentsorg/go-xpayments/XPSx"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/dashboard"
 	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -87,12 +88,12 @@ type Bootnodes struct {
 	Testnet []string
 }
 
-type gpayConfig struct {
+type XPSConfig struct {
 	Eth         eth.Config
 	Shh         whisper.Config
 	Node        node.Config
 	Ethstats    ethstatsConfig
-	Dashboard   dashboard.Config
+	XPSX        XPSx.Config
 	Account     account
 	StakeEnable bool
 	Bootnodes   Bootnodes
@@ -100,7 +101,7 @@ type gpayConfig struct {
 	NAT         string
 }
 
-func loadConfig(file string, cfg *gpayConfig) error {
+func loadConfig(file string, cfg *XPSConfig) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -124,13 +125,13 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
+func makeConfigNode(ctx *cli.Context) (*node.Node, XPSConfig) {
 	// Load defaults.
-	cfg := gpayConfig{
+	cfg := XPSConfig{
 		Eth:         eth.DefaultConfig,
 		Shh:         whisper.DefaultConfig,
+		XPSX:        XPSx.DefaultConfig,
 		Node:        defaultNodeConfig(),
-		Dashboard:   dashboard.DefaultConfig,
 		StakeEnable: true,
 		Verbosity:   3,
 		NAT:         "",
@@ -153,8 +154,19 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	}
 
 	// Check testnet is enable.
-	if ctx.GlobalBool(utils.BerylliumFlag.Name) {
+	if ctx.GlobalBool(utils.XPSTestnetFlag.Name) {
 		common.IsTestnet = true
+		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
+		cfg.Eth.NetworkId = 51
+		common.RelayerRegistrationSMC = common.RelayerRegistrationSMCTestnet
+		common.TIPTRC21Fee = common.TIPXPSXTestnet
+		common.TIPTRC21Fee = common.TIPTRC21FeeTestnet
+		common.TIPXPSXCancellationFee = common.TIPXPSXCancellationFeeTestnet
+	}
+
+	// Rewound
+	if rewound := ctx.GlobalInt(utils.RewoundFlag.Name); rewound != 0 {
+		common.Rewound = uint64(rewound)
 	}
 
 	// Check rollback hash exist.
@@ -163,10 +175,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	}
 
 	// Check GasPrice
-	common.MinGasPrice = common.DefaultMinGasPrice
+	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
 	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
 		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
-			common.MinGasPrice = gasPrice
+			common.MinGasPrice = big.NewInt(gasPrice)
 		}
 	}
 
@@ -196,8 +208,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	}
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
-	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
-
+	utils.SetXPSXConfig(ctx, &cfg.XPSX, cfg.Node.DataDir)
 	return stack, cfg
 }
 
@@ -224,14 +235,14 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) (*node.Node, gpayConfig) {
+func makeFullNode(ctx *cli.Context) (*node.Node, XPSConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
+	// Register XPSX's OrderBook service if requested.
+	// enable in default
+	utils.RegisterXPSXService(stack, &cfg.XPSX)
 	utils.RegisterEthService(stack, &cfg.Eth)
 
-	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
-	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
 	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
@@ -249,6 +260,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
+
 	return stack, cfg
 }
 

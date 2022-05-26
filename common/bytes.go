@@ -28,8 +28,6 @@ func ToHex(b []byte) string {
 	return "0x" + hex
 }
 
-// FromHex returns the bytes represented by the hexadecimal string s.
-// s may be prefixed with "0x".
 func FromHex(s string) []byte {
 	if len(s) > 1 {
 		if s[0:2] == "0x" || s[0:2] == "0X" {
@@ -57,11 +55,9 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 
 	return
 }
-
 func hasXPSPrefix(str string) bool {
 	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'p' || str[1] == 'P') && (str[2] == 's' || str[2] == 'S')
 }
-
 func hasHexPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }

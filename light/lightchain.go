@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
 	"github.com/xpaymentsorg/go-xpayments/core"
@@ -285,6 +285,9 @@ func (self *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*t
 		return nil, err
 	}
 	return self.GetBlock(ctx, hash, number)
+}
+
+func (bc *LightChain) SaveData() {
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress

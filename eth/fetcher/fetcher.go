@@ -22,7 +22,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
 	"github.com/xpaymentsorg/go-xpayments/core/types"

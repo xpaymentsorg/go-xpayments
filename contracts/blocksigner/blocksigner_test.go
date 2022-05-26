@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -18,16 +18,16 @@ package blocksigner
 import (
 	"context"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
-
-	"math/rand"
 
 	"github.com/xpaymentsorg/go-xpayments/accounts/abi/bind"
 	"github.com/xpaymentsorg/go-xpayments/accounts/abi/bind/backends"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
 var (
@@ -36,7 +36,7 @@ var (
 )
 
 func TestBlockSigner(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	contractBackend := backends.NewXPSSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000, params.TestXPoSMockChainConfig)
 	transactOpts := bind.NewKeyedTransactor(key)
 
 	blockSignerAddress, blockSigner, err := DeployBlockSigner(transactOpts, contractBackend, big.NewInt(99))

@@ -17,11 +17,10 @@
 package types
 
 import (
-	"math/big"
-	"testing"
-
 	"bytes"
+	"math/big"
 	"reflect"
+	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/rlp"

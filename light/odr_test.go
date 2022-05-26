@@ -26,8 +26,10 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/math"
+	"github.com/xpaymentsorg/go-xpayments/consensus"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
@@ -162,7 +164,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		var (
 			st     *state.StateDB
 			header *types.Header
-			chain  core.ChainContext
+			chain  consensus.ChainContext
 		)
 		if bc == nil {
 			chain = lc
@@ -176,11 +178,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 
 		// Perform read-only call.
 		st.SetBalance(testBankAddress, math.MaxBig256)
-		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, new(big.Int), data, false)}
+		feeCapacity := state.GetTRC21FeeCapacityFromState(st)
+		var balanceTokenFee *big.Int
+		if value, ok := feeCapacity[testContractAddr]; ok {
+			balanceTokenFee = value
+		}
+		msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 1000000, new(big.Int), data, false, balanceTokenFee)}
 		context := core.NewEVMContext(msg, header, chain, nil)
-		vmenv := vm.NewEVM(context, st, config, vm.Config{})
+		vmenv := vm.NewEVM(context, st, nil, config, vm.Config{})
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
+		owner := common.Address{}
+		ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)
 		res = append(res, ret...)
 		if st.Error() != nil {
 			return res, st.Error()
@@ -232,8 +240,8 @@ func testChainGen(i int, block *core.BlockGen) {
 
 func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	var (
-		sdb, _  = ethdb.NewMemDatabase()
-		ldb, _  = ethdb.NewMemDatabase()
+		sdb     = rawdb.NewMemoryDatabase()
+		ldb     = rawdb.NewMemoryDatabase()
 		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
 		genesis = gspec.MustCommit(sdb)
 	)

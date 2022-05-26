@@ -37,7 +37,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/console"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
@@ -209,7 +209,7 @@ func initialize() {
 
 	if *mailServerMode {
 		if len(msPassword) == 0 {
-			msPassword, err = prompt.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
 			if err != nil {
 				utils.Fatalf("Failed to read Mail Server password: %s", err)
 			}
@@ -348,7 +348,7 @@ func configureNode() {
 	if *requestMail {
 		p2pAccept = true
 		if len(msPassword) == 0 {
-			msPassword, err = prompt.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
 			if err != nil {
 				utils.Fatalf("Failed to read Mail Server password: %s", err)
 			}
@@ -357,7 +357,7 @@ func configureNode() {
 
 	if !*asymmetricMode && !*forwarderMode {
 		if len(symPass) == 0 {
-			symPass, err = prompt.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
+			symPass, err = console.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
 			if err != nil {
 				utils.Fatalf("Failed to read passphrase: %v", err)
 			}

@@ -16,7 +16,7 @@
 
 // Contains all the wrappers from the go-ethereum root package.
 
-package gpay
+package geth
 
 import (
 	"errors"

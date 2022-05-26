@@ -30,6 +30,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/contracts/chequebook/contract"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
 var (
@@ -42,11 +43,11 @@ var (
 )
 
 func newTestBackend() *backends.SimulatedBackend {
-	return backends.NewSimulatedBackend(core.GenesisAlloc{
+	return backends.NewXPSSimulatedBackend(core.GenesisAlloc{
 		addr0: {Balance: big.NewInt(1000000000)},
 		addr1: {Balance: big.NewInt(1000000000)},
 		addr2: {Balance: big.NewInt(1000000000)},
-	})
+	}, 10000000, params.TestXPoSMockChainConfig)
 }
 
 func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {

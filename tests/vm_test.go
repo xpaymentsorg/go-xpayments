@@ -17,12 +17,15 @@
 package tests
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 )
 
 func TestVM(t *testing.T) {
+	common.TIPXPSXCancellationFee = big.NewInt(100000000)
 	t.Parallel()
 	vmt := new(testMatcher)
 	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")

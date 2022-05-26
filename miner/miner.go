@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/xpaymentsorg/go-xpayments/XPSx"
+	"github.com/xpaymentsorg/go-xpayments/XPSxlending"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
@@ -40,6 +42,10 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	ChainDb() ethdb.Database
+	GetXPSX() *XPSx.XPSX
+	OrderPool() *core.OrderPool
+	LendingPool() *core.LendingPool
+	GetXPSXLending() *XPSxlending.Lending
 }
 
 // Miner creates blocks and searches for proof-of-work values.

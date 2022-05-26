@@ -27,6 +27,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/bitutil"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/bloombits"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/event"
@@ -67,7 +68,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
 	fmt.Println("Running bloombits benchmark   section size:", sectionSize)
 
-	db, err := ethdb.NewLDBDatabase(benchDataDir, 128, 1024)
+	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "")
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
@@ -129,7 +130,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	for i := 0; i < benchFilterCnt; i++ {
 		if i%20 == 0 {
 			db.Close()
-			db, _ = ethdb.NewLDBDatabase(benchDataDir, 128, 1024)
+			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "")
 			backend = &testBackend{mux, db, cnt, new(event.Feed), new(event.Feed), new(event.Feed), new(event.Feed)}
 		}
 		var addr common.Address
@@ -147,9 +148,8 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 }
 
 func forEachKey(db ethdb.Database, startPrefix, endPrefix []byte, fn func(key []byte)) {
-	it := db.(*ethdb.LDBDatabase).NewIterator()
-	it.Seek(startPrefix)
-	for it.Valid() {
+	it := db.NewIterator(startPrefix, nil)
+	for it.Next() {
 		key := it.Key()
 		cmpLen := len(key)
 		if len(endPrefix) < cmpLen {
@@ -176,7 +176,7 @@ func clearBloomBits(db ethdb.Database) {
 func BenchmarkNoBloomBits(b *testing.B) {
 	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
 	fmt.Println("Running benchmark without bloombits")
-	db, err := ethdb.NewLDBDatabase(benchDataDir, 128, 1024)
+	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "")
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}

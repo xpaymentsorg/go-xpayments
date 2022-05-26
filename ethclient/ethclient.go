@@ -253,6 +253,16 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 	return r, err
 }
 
+func (ec *Client) GetTransactionReceiptResult(ctx context.Context, txHash common.Hash) (*types.Receipt, json.RawMessage, error) {
+	var r *types.Receipt
+	result, err := ec.c.GetResultCallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
+	if err == nil {
+		if r == nil {
+			return nil, nil, ethereum.NotFound
+		}
+	}
+	return r, result, err
+}
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
@@ -474,6 +484,27 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
+}
+
+// SendOrderTransaction injects a signed transaction into the pending pool for execution.
+//
+// If the transaction was a contract creation use the TransactionReceipt method to get the
+// contract address after the transaction has been mined.
+func (ec *Client) SendOrderTransaction(ctx context.Context, tx *types.OrderTransaction) error {
+	data, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "XPSx_sendOrderRawTransaction", common.ToHex(data))
+}
+
+// SendLendingTransaction send lending to pool
+func (ec *Client) SendLendingTransaction(ctx context.Context, tx *types.LendingTransaction) error {
+	data, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "XPSx_sendLendingRawTransaction", common.ToHex(data))
 }
 
 func toCallArg(msg ethereum.CallMsg) interface{} {

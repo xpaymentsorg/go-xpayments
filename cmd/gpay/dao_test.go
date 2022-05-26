@@ -25,8 +25,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 )
 
 // Genesis block for nodes which don't care about the DAO fork (i.e. not configured)
@@ -89,7 +88,7 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 		expectVote  bool
 	}{
 		// Test DAO Default Mainnet
-		{"", params.MainnetChainConfig.DAOForkBlock, true},
+		// {"", params.XPSMainnetChainConfig.DAOForkBlock, false},
 		// test DAO Init Old Privnet
 		{daoOldGenesis, nil, false},
 		// test DAO Default No Fork Privnet
@@ -112,16 +111,16 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 		if err := ioutil.WriteFile(json, []byte(genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", test, err)
 		}
-		rungpay(t, "--datadir", datadir, "init", json).WaitExit()
+		runGpay(t, "--datadir", datadir, "init", json).WaitExit()
 	} else {
 		// Force chain initialization
 		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-		gpay := rungpay(t, append(args, []string{"--exec", "2+2", "console"}...)...)
-		gpay.WaitExit()
+		Gpay := runGpay(t, append(args, []string{"--exec", "2+2", "console"}...)...)
+		Gpay.WaitExit()
 	}
 	// Retrieve the DAO config flag from the database
-	path := filepath.Join(datadir, "xPaymentsChain", "chaindata")
-	db, err := ethdb.NewLDBDatabase(path, 0, 0)
+	path := filepath.Join(datadir, "gpay", "chaindata")
+	db, err := rawdb.NewLevelDBDatabase(path, 0, 0, "")
 	if err != nil {
 		t.Fatalf("test %d: failed to open test database: %v", test, err)
 	}

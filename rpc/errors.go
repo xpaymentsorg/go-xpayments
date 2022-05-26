@@ -18,12 +18,6 @@ package rpc
 
 import "fmt"
 
-// A DataError contains some data in addition to the error message.
-type DataError interface {
-	Error() string          // returns the message
-	ErrorData() interface{} // returns the error data
-}
-
 // request is for an unknown service
 type methodNotFoundError struct {
 	service string

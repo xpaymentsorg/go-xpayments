@@ -344,6 +344,30 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		err  error
 	)
 
+	// check if sender is in black list
+	if tx.From() != nil && common.Blacklist[*tx.From()] {
+		return fmt.Errorf("Reject transaction with sender in black-list: %v", tx.From().Hex())
+	}
+	// check if receiver is in black list
+	if tx.To() != nil && common.Blacklist[*tx.To()] {
+		return fmt.Errorf("Reject transaction with receiver in black-list: %v", tx.To().Hex())
+	}
+
+	// validate minFee slot for XPSZ
+	if tx.IsXPSZApplyTransaction() {
+		copyState := pool.currentState(ctx).Copy()
+		if err := core.ValidateXPSZApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
+			return err
+		}
+	}
+	// validate balance slot, token decimal for XPSX
+	if tx.IsXPSXApplyTransaction() {
+		copyState := pool.currentState(ctx).Copy()
+		if err := core.ValidateXPSXApplyTransaction(pool.chain, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
+			return err
+		}
+	}
+
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
 	if from, err = types.Sender(pool.signer, tx); err != nil {

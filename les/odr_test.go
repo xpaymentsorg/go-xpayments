@@ -26,6 +26,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/math"
 	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
@@ -127,27 +128,38 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(math.MaxBig256)
-
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
+				feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
+				var balanceTokenFee *big.Int
+				if value, ok := feeCapacity[testContractAddr]; ok {
+					balanceTokenFee = value
+				}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false, balanceTokenFee)}
 
 				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+				vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
-				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
+				owner := common.Address{}
+				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)
 				res = append(res, ret...)
 			}
 		} else {
 			header := lc.GetHeaderByHash(bhash)
-			state := light.NewState(ctx, header, lc.Odr())
-			state.SetBalance(testBankAddress, math.MaxBig256)
-			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
+			statedb := light.NewState(ctx, header, lc.Odr())
+			statedb.SetBalance(testBankAddress, math.MaxBig256)
+			feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
+			var balanceTokenFee *big.Int
+			if value, ok := feeCapacity[testContractAddr]; ok {
+				balanceTokenFee = value
+			}
+			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false, balanceTokenFee)}
 			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, state, config, vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
-			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
-			if state.Error() == nil {
+			owner := common.Address{}
+			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)
+			if statedb.Error() == nil {
 				res = append(res, ret...)
 			}
 		}
@@ -160,8 +172,8 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	peers := newPeerSet()
 	dist := newRequestDistributor(peers, make(chan struct{}))
 	rm := newRetrieveManager(peers, dist, nil)
-	db, _ := ethdb.NewMemDatabase()
-	ldb, _ := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
+	ldb := rawdb.NewMemoryDatabase()
 	odr := NewLesOdr(ldb, light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency), rm)
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)

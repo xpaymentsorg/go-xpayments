@@ -18,7 +18,6 @@ package miner
 
 import (
 	"sync"
-
 	"sync/atomic"
 
 	"github.com/xpaymentsorg/go-xpayments/consensus"

@@ -34,7 +34,7 @@ func tmpdir(t *testing.T) string {
 	return dir
 }
 
-type testgpay struct {
+type testGpay struct {
 	*cmdtest.TestCmd
 
 	// template variables for expect
@@ -63,8 +63,8 @@ func TestMain(m *testing.M) {
 
 // spawns gpay with the given command line args. If the args don't set --datadir, the
 // child g gets a temporary data directory.
-func rungpay(t *testing.T, args ...string) *testgpay {
-	tt := &testgpay{}
+func runGpay(t *testing.T, args ...string) *testGpay {
+	tt := &testGpay{}
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 	for i, arg := range args {
 		switch {

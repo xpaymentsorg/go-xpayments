@@ -23,15 +23,21 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 )
 
-var (
-	MainnetGenesisHash   = common.HexToHash("8d13370621558f4ed0da587934473c0404729f28b0ff1d50e5fdd840457a2f17") // Mainnet genesis hash to enforce below configs on
-	BerylliumGenesisHash = common.HexToHash("dffc8ae3b45965404b4fd73ce7f0e13e822ac0fc23ce7e95b42bc5f1e57023a5") // Testnet genesis hash to enforce below configs on
+const (
+	ConsensusEngineVersion1 = "v1"
+	ConsensusEngineVersion2 = "v2"
 )
 
 var (
-	// MainnetChainConfig is the chain parameters to run a node on the main network.
-	MainnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(1),
+	XPSMainnetGenesisHash = common.HexToHash("9326145f8a2c8c00bbe13afc7d7f3d9c868b5ef39d89f2f4e9390e9720298624") // XPS Mainnet genesis hash to enforce below configs on
+	MainnetGenesisHash    = common.HexToHash("8d13370621558f4ed0da587934473c0404729f28b0ff1d50e5fdd840457a2f17") // Mainnet genesis hash to enforce below configs on
+	TestnetGenesisHash    = common.HexToHash("dffc8ae3b45965404b4fd73ce7f0e13e822ac0fc23ce7e95b42bc5f1e57023a5") // Testnet genesis hash to enforce below configs on
+)
+
+var (
+	// XPoSChain mainnet config
+	XPSMainnetChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(88),
 		HomesteadBlock: big.NewInt(1),
 		EIP150Block:    big.NewInt(2),
 		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
@@ -44,13 +50,43 @@ var (
 			Reward:              250,
 			RewardCheckpoint:    900,
 			Gap:                 5,
-			FoudationWalletAddr: common.HexToAddress("xps0000000000000000000000000000000000000013"),
+			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
 		},
 	}
 
-	// BerylliumChainConfig contains the chain parameters to run a node on the Beryllium test network.
-	BerylliumChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(2),
+	// MainnetChainConfig is the chain parameters to run a node on the main network.
+	MainnetChainConfig = &ChainConfig{
+		ChainId:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(1150000),
+		DAOForkBlock:        big.NewInt(1920000),
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(2463000),
+		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:         big.NewInt(2675000),
+		EIP158Block:         big.NewInt(2675000),
+		ByzantiumBlock:      big.NewInt(4370000),
+		ConstantinopleBlock: nil,
+		Ethash:              new(EthashConfig),
+	}
+
+	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	TestnetChainConfig = &ChainConfig{
+		ChainId:             big.NewInt(3),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x62e0fde86e34c263e250fbcd5ca4598ba8ca10a1d166c8526bb127e10b313311"),
+		EIP155Block:         big.NewInt(10),
+		EIP158Block:         big.NewInt(10),
+		ByzantiumBlock:      big.NewInt(1700000),
+		ConstantinopleBlock: nil,
+		Ethash:              new(EthashConfig),
+	}
+
+	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
+	RinkebyChainConfig = &ChainConfig{
+		ChainId:             big.NewInt(4),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -78,10 +114,17 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXPoSProtocolChanges   = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 0, Epoch: 30000}}
+	AllXPoSProtocolChanges   = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 0, Epoch: 30000}}
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
-	TestChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
-	TestRules                = TestChainConfig.Rules(new(big.Int))
+
+	TestXPoSChanConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 2, Epoch: 900, Reward: 250, RewardCheckpoint: 900, Gap: 890, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068")}}
+	// XPoS config in use for v1 engine only
+	TestXPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true}}
+	// XPoS config with v2 engine after block 10
+	TestXPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2ConsensusBlockNumber: big.NewInt(10)}}
+
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -134,17 +177,30 @@ func (c *CliqueConfig) String() string {
 
 // XPoSConfig is the consensus engine configs for delegated-proof-of-stake based sealing.
 type XPoSConfig struct {
-	Period              uint64         `json:"period"`              // Number of seconds between blocks to enforce
-	Epoch               uint64         `json:"epoch"`               // Epoch length to reset votes and checkpoint
-	Reward              uint64         `json:"reward"`              // Block reward - unit Ether
-	RewardCheckpoint    uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards.
-	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
-	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
+	Period                 uint64         `json:"period"`              // Number of seconds between blocks to enforce
+	Epoch                  uint64         `json:"epoch"`               // Epoch length to reset votes and checkpoint
+	Reward                 uint64         `json:"reward"`              // Block reward - unit Ether
+	RewardCheckpoint       uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards.
+	Gap                    uint64         `json:"gap"`                 // Gap time preparing for the next epoch
+	FoudationWalletAddr    common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
+	SkipValidation         bool           //Skip Block Validation for testing purpose
+	V2ConsensusBlockNumber *big.Int
 }
 
 // String implements the stringer interface, returning the consensus engine details.
 func (c *XPoSConfig) String() string {
 	return "XPoS"
+}
+
+/**
+ConsensusVersion will return the consensus version to use for the provided block number. The returned int represent its version
+TODO: It's a dummy value for now until the 2.0 consensus engine is fully implemented.
+*/
+func (c *XPoSConfig) BlockConsensusVersion(num *big.Int) string {
+	if c.V2ConsensusBlockNumber != nil && num.Cmp(c.V2ConsensusBlockNumber) > 0 {
+		return ConsensusEngineVersion2
+	}
+	return ConsensusEngineVersion1
 }
 
 // String implements the fmt.Stringer interface.
@@ -202,6 +258,18 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
+// IsPetersburg returns whether num is either
+// - equal to or greater than the PetersburgBlock fork block,
+// - OR is nil, and Constantinople is active
+func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
+	return isForked(common.TIPXPSXCancellationFee, num)
+}
+
+// IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
+func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
+	return isForked(common.TIPXPSXCancellationFee, num)
+}
+
 func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
 	return isForked(common.TIP2019Block, num)
 }
@@ -215,9 +283,29 @@ func (c *ChainConfig) IsTIPRandomize(num *big.Int) bool {
 }
 
 // IsTIPIncreaseMasternodes using for increase masternodes from 18 to 40
+
 // Time update: 23-07-2019
 func (c *ChainConfig) IsTIPIncreaseMasternodes(num *big.Int) bool {
 	return isForked(common.TIPIncreaseMasternodes, num)
+}
+
+func (c *ChainConfig) IsTIPNoHalvingMNReward(num *big.Int) bool {
+	return isForked(common.TIPNoHalvingMNReward, num)
+}
+func (c *ChainConfig) IsTIPXPSX(num *big.Int) bool {
+	if common.IsTestnet {
+		return isForked(common.TIPXPSXTestnet, num)
+	} else {
+		return isForked(common.TIPXPSX, num)
+	}
+}
+
+func (c *ChainConfig) IsTIPXPSXLending(num *big.Int) bool {
+	return isForked(common.TIPXPSXLending, num)
+}
+
+func (c *ChainConfig) IsTIPXPSXCancellationFee(num *big.Int) bool {
+	return isForked(common.TIPXPSXCancellationFee, num)
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
@@ -347,9 +435,9 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainId                                   *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-	IsByzantium                               bool
+	ChainId                                                 *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -357,5 +445,15 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+	return Rules{
+		ChainId:          new(big.Int).Set(chainId),
+		IsHomestead:      c.IsHomestead(num),
+		IsEIP150:         c.IsEIP150(num),
+		IsEIP155:         c.IsEIP155(num),
+		IsEIP158:         c.IsEIP158(num),
+		IsByzantium:      c.IsByzantium(num),
+		IsConstantinople: c.IsConstantinople(num),
+		IsPetersburg:     c.IsPetersburg(num),
+		IsIstanbul:       c.IsIstanbul(num),
+	}
 }

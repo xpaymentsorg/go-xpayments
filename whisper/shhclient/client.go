@@ -19,7 +19,7 @@ package shhclient
 import (
 	"context"
 
-	ethereum "github.com/xpaymentsorg/go-xpayments"
+	xpayments "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
@@ -168,7 +168,7 @@ func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) error {
 // SubscribeMessages subscribes to messages that match the given criteria. This method
 // is only supported on bi-directional connections such as websockets and IPC.
 // NewMessageFilter uses polling and is supported over HTTP.
-func (sc *Client) SubscribeMessages(ctx context.Context, criteria whisper.Criteria, ch chan<- *whisper.Message) (ethereum.Subscription, error) {
+func (sc *Client) SubscribeMessages(ctx context.Context, criteria whisper.Criteria, ch chan<- *whisper.Message) (xpayments.Subscription, error) {
 	return sc.c.ShhSubscribe(ctx, ch, "messages", criteria)
 }
 

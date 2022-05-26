@@ -288,7 +288,6 @@ func bytesHave0xPrefix(input []byte) bool {
 func bytesHaveXPSPrefix(input []byte) bool {
 	return len(input) >= 3 && (input[0] == 'x' || input[0] == 'X') && (input[1] == 'p' || input[1] == 'P') && (input[2] == 's' || input[2] == 'S')
 }
-
 func checkText(input []byte, wantPrefix bool) ([]byte, error) {
 	if len(input) == 0 {
 		return nil, nil // empty strings are allowed

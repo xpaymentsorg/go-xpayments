@@ -18,8 +18,8 @@ package core
 
 import (
 	"container/list"
-	"fmt"
 
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/event"
@@ -77,11 +77,7 @@ func (tm *TestManager) Db() ethdb.Database {
 }
 
 func NewTestManager() *TestManager {
-	db, err := ethdb.NewMemDatabase()
-	if err != nil {
-		fmt.Println("Could not create mem-db, failing")
-		return nil
-	}
+	db := rawdb.NewMemoryDatabase()
 
 	testManager := &TestManager{}
 	testManager.eventMux = new(event.TypeMux)
