@@ -21,11 +21,13 @@
 package debug
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
@@ -33,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-bexpr"
 	"github.com/xpaymentsorg/go-xpayments/log"
 )
 
@@ -53,19 +56,19 @@ type HandlerT struct {
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
-	Glogger.Verbosity(log.Lvl(level))
+	glogger.Verbosity(log.Lvl(level))
 }
 
 // Vmodule sets the log verbosity pattern. See package log for details on the
 // pattern syntax.
 func (*HandlerT) Vmodule(pattern string) error {
-	return Glogger.Vmodule(pattern)
+	return glogger.Vmodule(pattern)
 }
 
 // BacktraceAt sets the log backtrace location. See package log for details on
 // the pattern syntax.
 func (*HandlerT) BacktraceAt(location string) error {
-	return Glogger.BacktraceAt(location)
+	return glogger.BacktraceAt(location)
 }
 
 // MemStats returns detailed runtime memory statistics.
@@ -188,14 +191,48 @@ func (*HandlerT) WriteMemProfile(file string) error {
 	return writeProfile("heap", file)
 }
 
-// Stacks returns a printed representation of the stacks of all goroutines.
-func (*HandlerT) Stacks() string {
-	buf := make([]byte, 1024*1024)
-	buf = buf[:runtime.Stack(buf, true)]
-	return string(buf)
+// Stacks returns a printed representation of the stacks of all goroutines. It
+// also permits the following optional filters to be used:
+//   - filter: boolean expression of packages to filter for
+func (*HandlerT) Stacks(filter *string) string {
+	buf := new(bytes.Buffer)
+	pprof.Lookup("goroutine").WriteTo(buf, 2)
+
+	// If any filtering was requested, execute them now
+	if filter != nil && len(*filter) > 0 {
+		expanded := *filter
+
+		// The input filter is a logical expression of package names. Transform
+		// it into a proper boolean expression that can be fed into a parser and
+		// interpreter:
+		//
+		// E.g. (eth || snap) && !p2p -> (eth in Value || snap in Value) && p2p not in Value
+		expanded = regexp.MustCompile(`[:/\.A-Za-z0-9_-]+`).ReplaceAllString(expanded, "`$0` in Value")
+		expanded = regexp.MustCompile("!(`[:/\\.A-Za-z0-9_-]+`)").ReplaceAllString(expanded, "$1 not")
+		expanded = strings.ReplaceAll(expanded, "||", "or")
+		expanded = strings.ReplaceAll(expanded, "&&", "and")
+		log.Info("Expanded filter expression", "filter", *filter, "expanded", expanded)
+
+		expr, err := bexpr.CreateEvaluator(expanded)
+		if err != nil {
+			log.Error("Failed to parse filter expression", "expanded", expanded, "err", err)
+			return ""
+		}
+		// Split the goroutine dump into segments and filter each
+		dump := buf.String()
+		buf.Reset()
+
+		for _, trace := range strings.Split(dump, "\n\n") {
+			if ok, _ := expr.Evaluate(map[string]string{"Value": trace}); ok {
+				buf.WriteString(trace)
+				buf.WriteString("\n\n")
+			}
+		}
+	}
+	return buf.String()
 }
 
-// FreeOSMemory returns unused memory to the OS.
+// FreeOSMemory forces a garbage collection.
 func (*HandlerT) FreeOSMemory() {
 	debug.FreeOSMemory()
 }

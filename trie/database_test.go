@@ -23,7 +23,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
 )
 
-// Tests that the trie database returns a missing trie Node error if attempting
+// Tests that the trie database returns a missing trie node error if attempting
 // to retrieve the meta root.
 func TestDatabaseMetarootFetch(t *testing.T) {
 	db := NewDatabase(memorydb.New())

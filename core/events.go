@@ -21,28 +21,11 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 )
 
-// TxPreEvent is posted when a transaction enters the transaction pool.
-type TxPreEvent struct{ Tx *types.Transaction }
-
-// OrderTxPreEvent is posted when a order transaction enters the order transaction pool.
-type OrderTxPreEvent struct{ Tx *types.OrderTransaction }
-
-// LendingTxPreEvent is posted when a order transaction enters the order transaction pool.
-type LendingTxPreEvent struct{ Tx *types.LendingTransaction }
-
-// PendingLogsEvent is posted pre mining and notifies of pending logs.
-type PendingLogsEvent struct {
-	Logs []*types.Log
-}
-
-// PendingStateEvent is posted pre mining and notifies of pending state changes.
-type PendingStateEvent struct{}
+// NewTxsEvent is posted when a batch of transactions enter the transaction pool.
+type NewTxsEvent struct{ Txs []*types.Transaction }
 
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block *types.Block }
-
-// RemovedTransactionEvent is posted when a reorg happens
-type RemovedTransactionEvent struct{ Txs types.Transactions }
 
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }

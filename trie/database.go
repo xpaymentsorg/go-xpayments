@@ -21,11 +21,13 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
@@ -56,30 +58,21 @@ var (
 	memcacheCommitSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/commit/size", nil)
 )
 
-// secureKeyPrefix is the database key prefix used to store trie Node preimages.
-var secureKeyPrefix = []byte("secure-key-")
-
-// secureKeyPrefixLength is the length of the above prefix
-const secureKeyPrefixLength = 11
-
-// secureKeyLength is the length of the above prefix + 32byte hash.
-const secureKeyLength = secureKeyPrefixLength + 32
-
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 //
 // Note, the trie Database is **not** thread safe in its mutations, but it **is**
-// thread safe in providing individual, independent Node access. The rationale
+// thread safe in providing individual, independent node access. The rationale
 // behind this split design is to provide read access to RPC handlers and sync
 // servers even while the trie is executing expensive garbage collection.
 type Database struct {
 	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
 
-	cleans  *fastcache.Cache            // GC friendly memory Cache of clean Node RLPs
-	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty nodes
-	oldest  common.Hash                 // Oldest tracked Node, flush-list head
-	newest  common.Hash                 // Newest tracked Node, flush-list tail
+	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
+	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
+	oldest  common.Hash                 // Oldest tracked node, flush-list head
+	newest  common.Hash                 // Newest tracked node, flush-list tail
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
 
@@ -91,68 +84,66 @@ type Database struct {
 	flushnodes uint64             // Nodes flushed since last commit
 	flushsize  common.StorageSize // Data storage flushed since last commit
 
-	dirtiesSize   common.StorageSize // Storage size of the dirty Node Cache (exc. metadata)
+	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. metadata)
 	childrenSize  common.StorageSize // Storage size of the external children tracking
-	preimagesSize common.StorageSize // Storage size of the preimages Cache
+	preimagesSize common.StorageSize // Storage size of the preimages cache
 
-	Lock sync.RWMutex
+	lock sync.RWMutex
 }
 
 // rawNode is a simple binary blob used to differentiate between collapsed trie
 // nodes and already encoded RLP binary blobs (while at the same time store them
-// in the same Cache fields).
+// in the same cache fields).
 type rawNode []byte
 
-func (n rawNode) Cache() (HashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
 func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
-// rawFullNode represents only the useful data content of a full Node, with the
+func (n rawNode) EncodeRLP(w io.Writer) error {
+	_, err := w.Write(n)
+	return err
+}
+
+// rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
-type rawFullNode [17]Node
+type rawFullNode [17]node
 
-func (n rawFullNode) Cache() (HashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawFullNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
 func (n rawFullNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]Node
-
-	for i, child := range n {
-		if child != nil {
-			nodes[i] = child
-		} else {
-			nodes[i] = nilValueNode
-		}
-	}
-	return rlp.Encode(w, nodes)
+	eb := rlp.NewEncoderBuffer(w)
+	n.encode(eb)
+	return eb.Flush()
 }
 
-// rawShortNode represents only the useful data content of a short Node, with the
+// rawShortNode represents only the useful data content of a short node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
 type rawShortNode struct {
 	Key []byte
-	Val Node
+	Val node
 }
 
-func (n rawShortNode) Cache() (HashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawShortNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
 func (n rawShortNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
-// cachedNode is all the information we know about a single cached Node in the
-// memory database write layer.
+// cachedNode is all the information we know about a single cached trie node
+// in the memory database write layer.
 type cachedNode struct {
-	node Node   // Cached collapsed trie Node, or raw rlp data
+	node node   // Cached collapsed trie node, or raw rlp data
 	size uint16 // Byte size of the useful cached data
 
 	parents  uint32                 // Number of live nodes referencing this one
-	children map[common.Hash]uint16 // External children referenced by this Node
+	children map[common.Hash]uint16 // External children referenced by this node
 
-	flushPrev common.Hash // Previous Node in the flush-list
-	flushNext common.Hash // Next Node in the flush-list
+	flushPrev common.Hash // Previous node in the flush-list
+	flushNext common.Hash // Next node in the flush-list
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
-// Node data included. It's an approximate size, but should be a lot better
+// node data included. It's an approximate size, but should be a lot better
 // than not counting them.
 var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
 
@@ -160,31 +151,27 @@ var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
 // reference map.
 const cachedNodeChildrenSize = 48
 
-// rlp returns the raw rlp encoded blob of the cached Node, either directly from
-// the Cache, or by regenerating it from the collapsed Node.
+// rlp returns the raw rlp encoded blob of the cached trie node, either directly
+// from the cache, or by regenerating it from the collapsed node.
 func (n *cachedNode) rlp() []byte {
 	if node, ok := n.node.(rawNode); ok {
 		return node
 	}
-	blob, err := rlp.EncodeToBytes(n.node)
-	if err != nil {
-		panic(err)
-	}
-	return blob
+	return nodeToBytes(n.node)
 }
 
-// obj returns the decoded and expanded trie Node, either directly from the Cache,
+// obj returns the decoded and expanded trie node, either directly from the cache,
 // or by regenerating it from the rlp encoded blob.
-func (n *cachedNode) obj(hash common.Hash) Node {
+func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		return MustDecodeNode(hash[:], node)
+		return mustDecodeNode(hash[:], node)
 	}
 	return expandNode(hash[:], n.node)
 }
 
-// forChilds invokes the callback for  all the tracked children of this Node,
-// both the implicit ones  from inside the Node as well as the explicit ones
-//from outside the Node.
+// forChilds invokes the callback for all the tracked children of this node,
+// both the implicit ones from inside the node as well as the explicit ones
+// from outside the node.
 func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
 	for child := range n.children {
 		onChild(child)
@@ -194,9 +181,9 @@ func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
 	}
 }
 
-// forGatherChildren traverses the Node hierarchy of a collapsed storage Node and
+// forGatherChildren traverses the node hierarchy of a collapsed storage node and
 // invokes the callback for all the hashnode children.
-func forGatherChildren(n Node, onChild func(hash common.Hash)) {
+func forGatherChildren(n node, onChild func(hash common.Hash)) {
 	switch n := n.(type) {
 	case *rawShortNode:
 		forGatherChildren(n.Val, onChild)
@@ -204,23 +191,23 @@ func forGatherChildren(n Node, onChild func(hash common.Hash)) {
 		for i := 0; i < 16; i++ {
 			forGatherChildren(n[i], onChild)
 		}
-	case HashNode:
+	case hashNode:
 		onChild(common.BytesToHash(n))
-	case ValueNode, nil:
+	case valueNode, nil, rawNode:
 	default:
-		panic(fmt.Sprintf("unknown Node type: %T", n))
+		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
 }
 
-// simplifyNode traverses the hierarchy of an expanded memory Node and discards
-// all the internal caches, returning a Node that only contains the raw data.
-func simplifyNode(n Node) Node {
+// simplifyNode traverses the hierarchy of an expanded memory node and discards
+// all the internal caches, returning a node that only contains the raw data.
+func simplifyNode(n node) node {
 	switch n := n.(type) {
-	case *ShortNode:
+	case *shortNode:
 		// Short nodes discard the flags and cascade
 		return &rawShortNode{Key: n.Key, Val: simplifyNode(n.Val)}
 
-	case *FullNode:
+	case *fullNode:
 		// Full nodes discard the flags and cascade
 		node := rawFullNode(n.Children)
 		for i := 0; i < len(node); i++ {
@@ -230,32 +217,32 @@ func simplifyNode(n Node) Node {
 		}
 		return node
 
-	case ValueNode, HashNode, rawNode:
+	case valueNode, hashNode, rawNode:
 		return n
 
 	default:
-		panic(fmt.Sprintf("unknown Node type: %T", n))
+		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
 }
 
-// expandNode traverses the Node hierarchy of a collapsed storage Node and converts
+// expandNode traverses the node hierarchy of a collapsed storage node and converts
 // all fields and keys into expanded memory form.
-func expandNode(hash HashNode, n Node) Node {
+func expandNode(hash hashNode, n node) node {
 	switch n := n.(type) {
 	case *rawShortNode:
 		// Short nodes need key and child expansion
-		return &ShortNode{
+		return &shortNode{
 			Key: compactToHex(n.Key),
 			Val: expandNode(nil, n.Val),
-			flags: NodeFlag{
+			flags: nodeFlag{
 				hash: hash,
 			},
 		}
 
 	case rawFullNode:
 		// Full nodes need child expansion
-		node := &FullNode{
-			flags: NodeFlag{
+		node := &fullNode{
+			flags: nodeFlag{
 				hash: hash,
 			},
 		}
@@ -266,67 +253,70 @@ func expandNode(hash HashNode, n Node) Node {
 		}
 		return node
 
-	case ValueNode, HashNode:
+	case valueNode, hashNode:
 		return n
 
 	default:
-		panic(fmt.Sprintf("unknown Node type: %T", n))
+		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
+}
+
+// Config defines all necessary options for database.
+type Config struct {
+	Cache     int    // Memory allowance (MB) to use for caching trie nodes in memory
+	Journal   string // Journal of clean cache to survive node restarts
+	Preimages bool   // Flag whether the preimage of trie key is recorded
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
-// its written out to disk or garbage collected. No read Cache is created, so all
+// its written out to disk or garbage collected. No read cache is created, so all
 // data retrievals will hit the underlying disk database.
 func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
-	return NewDatabaseWithCache(diskdb, 0)
+	return NewDatabaseWithConfig(diskdb, nil)
 }
 
-// NewDatabaseWithCache creates a new trie database to store ephemeral trie content
-// before its written out to disk or garbage collected. It also acts as a read Cache
+// NewDatabaseWithConfig creates a new trie database to store ephemeral trie content
+// before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
-func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
+func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database {
 	var cleans *fastcache.Cache
-	if cache > 0 {
-		cleans = fastcache.New(cache * 1024 * 1024)
+	if config != nil && config.Cache > 0 {
+		if config.Journal == "" {
+			cleans = fastcache.New(config.Cache * 1024 * 1024)
+		} else {
+			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
+		}
 	}
-	return &Database{
+	db := &Database{
 		diskdb: diskdb,
 		cleans: cleans,
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
-		preimages: make(map[common.Hash][]byte),
 	}
+	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
+		db.preimages = make(map[common.Hash][]byte)
+	}
+	return db
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() ethdb.KeyValueReader {
+func (db *Database) DiskDB() ethdb.KeyValueStore {
 	return db.diskdb
 }
 
-// InsertBlob writes a new reference tracked blob to the memory database if it's
-// yet unknown. This method should only be used for non-trie nodes that require
-// reference counting, since trie nodes are garbage collected directly through
-// their embedded children.
-func (db *Database) InsertBlob(hash common.Hash, blob []byte) {
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
-
-	db.insert(hash, len(blob), rawNode(blob))
-}
-
-// insert inserts a collapsed trie Node into the memory database. This method is
-// a more generic version of InsertBlob, supporting both raw blob insertions as
-// well ex trie Node insertions. The blob size must be specified to allow proper
-// size tracking.
-func (db *Database) insert(hash common.Hash, size int, node Node) {
-	// If the Node's already cached, skip
+// insert inserts a collapsed trie node into the memory database.
+// The blob size must be specified to allow proper size tracking.
+// All nodes inserted by this function will be reference tracked
+// and in theory should only used for **trie nodes** insertion.
+func (db *Database) insert(hash common.Hash, size int, node node) {
+	// If the node's already cached, skip
 	if _, ok := db.dirties[hash]; ok {
 		return
 	}
 	memcacheDirtyWriteMeter.Mark(int64(size))
 
-	// Create the cached entry for this Node
+	// Create the cached entry for this node
 	entry := &cachedNode{
 		node:      simplifyNode(node),
 		size:      uint16(size),
@@ -348,33 +338,39 @@ func (db *Database) insert(hash common.Hash, size int, node Node) {
 	db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
 }
 
-// InsertPreimage writes a new trie Node pre-image to the memory database if it's
-// yet unknown. The method will make a copy of the slice.
+// insertPreimage writes a new trie node pre-image to the memory database if it's
+// yet unknown. The method will NOT make a copy of the slice,
+// only use if the preimage will NOT be changed later on.
 //
-// Note, this method assumes that the database's Lock is held!
-func (db *Database) InsertPreimage(hash common.Hash, preimage []byte) {
+// Note, this method assumes that the database's lock is held!
+func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
+	// Short circuit if preimage collection is disabled
+	if db.preimages == nil {
+		return
+	}
+	// Track the preimage if a yet unknown one
 	if _, ok := db.preimages[hash]; ok {
 		return
 	}
-	db.preimages[hash] = common.CopyBytes(preimage)
+	db.preimages[hash] = preimage
 	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
-// Node retrieves a cached trie Node from memory, or returns nil if none can be
-// found in the memory Cache.
-func (db *Database) node(hash common.Hash) Node {
-	// Retrieve the Node from the clean Cache if available
+// node retrieves a cached trie node from memory, or returns nil if none can be
+// found in the memory cache.
+func (db *Database) node(hash common.Hash) node {
+	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return MustDecodeNode(hash[:], enc)
+			return mustDecodeNode(hash[:], enc)
 		}
 	}
-	// Retrieve the Node from the dirty Cache if available
-	db.Lock.RLock()
+	// Retrieve the node from the dirty cache if available
+	db.lock.RLock()
 	dirty := db.dirties[hash]
-	db.Lock.RUnlock()
+	db.lock.RUnlock()
 
 	if dirty != nil {
 		memcacheDirtyHitMeter.Mark(1)
@@ -393,17 +389,17 @@ func (db *Database) node(hash common.Hash) Node {
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
-	return MustDecodeNode(hash[:], enc)
+	return mustDecodeNode(hash[:], enc)
 }
 
-// Node retrieves an encoded cached trie Node from memory. If it cannot be found
+// Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
 	}
-	// Retrieve the Node from the clean Cache if available
+	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
@@ -411,10 +407,10 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 			return enc, nil
 		}
 	}
-	// Retrieve the Node from the dirty Cache if available
-	db.Lock.RLock()
+	// Retrieve the node from the dirty cache if available
+	db.lock.RLock()
 	dirty := db.dirties[hash]
-	db.Lock.RUnlock()
+	db.lock.RUnlock()
 
 	if dirty != nil {
 		memcacheDirtyHitMeter.Mark(1)
@@ -424,47 +420,42 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(hash[:])
-	if err == nil && enc != nil {
+	enc := rawdb.ReadTrieNode(db.diskdb, hash)
+	if len(enc) != 0 {
 		if db.cleans != nil {
 			db.cleans.Set(hash[:], enc)
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}
+		return enc, nil
 	}
-	return enc, err
+	return nil, errors.New("not found")
 }
 
-// Preimage retrieves a cached trie Node pre-image from memory. If it cannot be
+// preimage retrieves a cached trie node pre-image from memory. If it cannot be
 // found cached, the method queries the persistent database for the content.
-func (db *Database) Preimage(hash common.Hash) ([]byte, error) {
-	// Retrieve the Node from Cache if available
-	db.Lock.RLock()
+func (db *Database) preimage(hash common.Hash) []byte {
+	// Short circuit if preimage collection is disabled
+	if db.preimages == nil {
+		return nil
+	}
+	// Retrieve the node from cache if available
+	db.lock.RLock()
 	preimage := db.preimages[hash]
-	db.Lock.RUnlock()
+	db.lock.RUnlock()
 
 	if preimage != nil {
-		return preimage, nil
+		return preimage
 	}
-	// Content unavailable in memory, attempt to retrieve from disk
-	return db.diskdb.Get(secureKey(hash))
-}
-
-// secureKey returns the database key for the Preimage of key (as a newly
-// allocated byte-slice)
-func secureKey(hash common.Hash) []byte {
-	buf := make([]byte, secureKeyLength)
-	copy(buf, secureKeyPrefix)
-	copy(buf[secureKeyPrefixLength:], hash[:])
-	return buf
+	return rawdb.ReadPreimage(db.diskdb, hash)
 }
 
 // Nodes retrieves the hashes of all the nodes cached within the memory database.
 // This method is extremely expensive and should only be used to validate internal
 // states in test code.
 func (db *Database) Nodes() []common.Hash {
-	db.Lock.RLock()
-	defer db.Lock.RUnlock()
+	db.lock.RLock()
+	defer db.lock.RUnlock()
 
 	var hashes = make([]common.Hash, 0, len(db.dirties))
 	for hash := range db.dirties {
@@ -475,17 +466,20 @@ func (db *Database) Nodes() []common.Hash {
 	return hashes
 }
 
-// Reference adds a new reference from a parent Node to a child Node.
+// Reference adds a new reference from a parent node to a child node.
+// This function is used to add reference between internal trie node
+// and external node(e.g. storage trie root), all internal trie nodes
+// are referenced together by database itself.
 func (db *Database) Reference(child common.Hash, parent common.Hash) {
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	db.reference(child, parent)
 }
 
 // reference is the private locked version of Reference.
 func (db *Database) reference(child common.Hash, parent common.Hash) {
-	// If the Node does not exist, it's a Node pulled from disk, skip
+	// If the node does not exist, it's a node pulled from disk, skip
 	node, ok := db.dirties[child]
 	if !ok {
 		return
@@ -504,15 +498,15 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	}
 }
 
-// Dereference removes an existing reference from a root Node.
+// Dereference removes an existing reference from a root node.
 func (db *Database) Dereference(root common.Hash) {
 	// Sanity check to ensure that the meta-root is not removed
 	if root == (common.Hash{}) {
-		log.Error("Attempted to dereference the trie Cache meta root")
+		log.Error("Attempted to dereference the trie cache meta root")
 		return
 	}
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	db.dereference(root, common.Hash{})
@@ -541,21 +535,21 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 			db.childrenSize -= (common.HashLength + 2) // uint16 counter
 		}
 	}
-	// If the child does not exist, it's a previously committed Node.
+	// If the child does not exist, it's a previously committed node.
 	node, ok := db.dirties[child]
 	if !ok {
 		return
 	}
 	// If there are no more references to the child, delete it and cascade
 	if node.parents > 0 {
-		// This is a special cornercase where a Node loaded from disk (i.e. not in the
-		// memcache any more) gets reinjected as a new Node (short Node split into full,
-		// then reverted into short), causing a cached Node to have no parents. That is
+		// This is a special cornercase where a node loaded from disk (i.e. not in the
+		// memcache any more) gets reinjected as a new node (short node split into full,
+		// then reverted into short), causing a cached node to have no parents. That is
 		// no problem in itself, but don't make maxint parents out of it.
 		node.parents--
 	}
 	if node.parents == 0 {
-		// Remove the Node from the flush-list
+		// Remove the node from the flush-list
 		switch child {
 		case db.oldest:
 			db.oldest = node.flushNext
@@ -567,7 +561,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 			db.dirties[node.flushPrev].flushNext = node.flushNext
 			db.dirties[node.flushNext].flushPrev = node.flushPrev
 		}
-		// Dereference all children and delete the Node
+		// Dereference all children and delete the node
 		node.forChilds(func(hash common.Hash) {
 			db.dereference(hash, child)
 		})
@@ -587,32 +581,25 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 func (db *Database) Cap(limit common.StorageSize) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
-	// memory Cache during commit but not yet in persistent storage). This is ensured
+	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	batch := db.diskdb.NewBatch()
 
-	// Db.dirtiesSize only contains the useful data in the Cache, but when reporting
+	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted.
 	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*cachedNodeSize)
 	size += db.childrenSize - common.StorageSize(len(db.dirties[common.Hash{}].children)*(common.HashLength+2))
 
-	// We reuse an ephemeral buffer for the keys. The batch Put operation
-	// copies it internally, so we can reuse it.
-	var keyBuf [secureKeyLength]byte
-	copy(keyBuf[:], secureKeyPrefix)
-
-	// If the Preimage Cache got large enough, push to disk. If it's still small
+	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
 	flushPreimages := db.preimagesSize > 4*1024*1024
 	if flushPreimages {
-		for hash, preimage := range db.preimages {
-			copy(keyBuf[secureKeyPrefixLength:], hash[:])
-			if err := batch.Put(keyBuf[:], preimage); err != nil {
-				log.Error("Failed to commit Preimage from trie database", "err", err)
-				return err
-			}
+		if db.preimages == nil {
+			log.Error("Attempted to write preimages whilst disabled")
+		} else {
+			rawdb.WritePreimages(batch, db.preimages)
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
 					return err
@@ -624,11 +611,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
 	for size > limit && oldest != (common.Hash{}) {
-		// Fetch the oldest referenced Node and push into the batch
+		// Fetch the oldest referenced node and push into the batch
 		node := db.dirties[oldest]
-		if err := batch.Put(oldest[:], node.rlp()); err != nil {
-			return err
-		}
+		rawdb.WriteTrieNode(batch, oldest, node.rlp())
+
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -639,7 +625,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		}
 		// Iterate to the next flush item, or abort if the size cap was achieved. Size
 		// is the total size, including the useful cached data (hash -> blob), the
-		// Cache item metadata, as well as external children mappings.
+		// cache item metadata, as well as external children mappings.
 		size -= common.StorageSize(common.HashLength + int(node.size) + cachedNodeSize)
 		if node.children != nil {
 			size -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
@@ -652,12 +638,15 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		return err
 	}
 	// Write successful, clear out the flushed data
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	if flushPreimages {
-		db.preimages = make(map[common.Hash][]byte)
-		db.preimagesSize = 0
+		if db.preimages == nil {
+			log.Error("Attempted to reset preimage cache whilst disabled")
+		} else {
+			db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
+		}
 	}
 	for db.oldest != oldest {
 		node := db.dirties[db.oldest]
@@ -686,52 +675,35 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	return nil
 }
 
-// Commit iterates over all the children of a particular Node, writes them out
+// Commit iterates over all the children of a particular node, writes them out
 // to disk, forcefully tearing down all references in both directions. As a side
 // effect, all pre-images accumulated up to this point are also written.
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool) error {
+func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
-	// memory Cache during commit but not yet in persistent storage). This is ensured
+	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
-	// We reuse an ephemeral buffer for the keys. The batch Put operation
-	// copies it internally, so we can reuse it.
-	var keyBuf [secureKeyLength]byte
-	copy(keyBuf[:], secureKeyPrefix)
-
 	// Move all of the accumulated preimages into a write batch
-	for hash, preimage := range db.preimages {
-		copy(keyBuf[secureKeyPrefixLength:], hash[:])
-		if err := batch.Put(keyBuf[:], preimage); err != nil {
-			log.Error("Failed to commit Preimage from trie database", "err", err)
+	if db.preimages != nil {
+		rawdb.WritePreimages(batch, db.preimages)
+		// Since we're going to replay trie node writes into the clean cache, flush out
+		// any batched pre-images before continuing.
+		if err := batch.Write(); err != nil {
 			return err
 		}
-		// If the batch is too large, flush to disk
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return err
-			}
-			batch.Reset()
-		}
+		batch.Reset()
 	}
-	// Since we're going to replay trie Node writes into the clean Cache, flush out
-	// any batched pre-images before continuing.
-	if err := batch.Write(); err != nil {
-		return err
-	}
-	batch.Reset()
-
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
 
 	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher); err != nil {
+	if err := db.commit(node, batch, uncacher, callback); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
@@ -741,16 +713,16 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		return err
 	}
 	// Uncache any leftovers in the last batch
-	db.Lock.Lock()
-	defer db.Lock.Unlock()
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	batch.Replay(uncacher)
 	batch.Reset()
 
-	// Reset the storage counters and bumpd metrics
-	db.preimages = make(map[common.Hash][]byte)
-	db.preimagesSize = 0
-
+	// Reset the storage counters and bumped metrics
+	if db.preimages != nil {
+		db.preimages, db.preimagesSize = make(map[common.Hash][]byte), 0
+	}
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
@@ -770,8 +742,8 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
-	// If the Node does not exist, it's a previously committed Node
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
+	// If the node does not exist, it's a previously committed node
 	node, ok := db.dirties[hash]
 	if !ok {
 		return nil
@@ -779,24 +751,25 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
-			err = db.commit(child, batch, uncacher)
+			err = db.commit(child, batch, uncacher, callback)
 		}
 	})
 	if err != nil {
 		return err
 	}
-	if err := batch.Put(hash[:], node.rlp()); err != nil {
-		return err
-	}
 	// If we've reached an optimal batch size, commit and start over
+	rawdb.WriteTrieNode(batch, hash, node.rlp())
+	if callback != nil {
+		callback(hash)
+	}
 	if batch.ValueSize() >= ethdb.IdealBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
 		}
-		db.Lock.Lock()
+		db.lock.Lock()
 		batch.Replay(uncacher)
 		batch.Reset()
-		db.Lock.Unlock()
+		db.lock.Unlock()
 	}
 	return nil
 }
@@ -809,13 +782,13 @@ type cleaner struct {
 
 // Put reacts to database writes and implements dirty data uncaching. This is the
 // post-processing step of a commit operation where the already persisted trie is
-// removed from the dirty Cache and moved into the clean Cache. The reason behind
-// the two-phase commit is to ensure ensure data availability while moving from
-// memory to disk.
+// removed from the dirty cache and moved into the clean cache. The reason behind
+// the two-phase commit is to ensure data availability while moving from memory
+// to disk.
 func (c *cleaner) Put(key []byte, rlp []byte) error {
 	hash := common.BytesToHash(key)
 
-	// If the Node does not exist, we're done on this path
+	// If the node does not exist, we're done on this path
 	node, ok := c.db.dirties[hash]
 	if !ok {
 		return nil
@@ -832,13 +805,13 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 		c.db.dirties[node.flushPrev].flushNext = node.flushNext
 		c.db.dirties[node.flushNext].flushPrev = node.flushPrev
 	}
-	// Remove the Node from the dirty Cache
+	// Remove the node from the dirty cache
 	delete(c.db.dirties, hash)
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
 		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 	}
-	// Move the flushed Node into the clean Cache to prevent insta-reloads
+	// Move the flushed node into the clean cache to prevent insta-reloads
 	if c.db.cleans != nil {
 		c.db.cleans.Set(hash[:], rlp)
 		memcacheCleanWriteMeter.Mark(int64(len(rlp)))
@@ -850,16 +823,56 @@ func (c *cleaner) Delete(key []byte) error {
 	panic("not implemented")
 }
 
-// Size returns the current storage size of the memory Cache in front of the
+// Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
 func (db *Database) Size() (common.StorageSize, common.StorageSize) {
-	db.Lock.RLock()
-	defer db.Lock.RUnlock()
+	db.lock.RLock()
+	defer db.lock.RUnlock()
 
-	// Db.dirtiesSize only contains the useful data in the Cache, but when reporting
+	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted.
 	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
 	var metarootRefs = common.StorageSize(len(db.dirties[common.Hash{}].children) * (common.HashLength + 2))
 	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, db.preimagesSize
+}
+
+// saveCache saves clean state cache to given directory path
+// using specified CPU cores.
+func (db *Database) saveCache(dir string, threads int) error {
+	if db.cleans == nil {
+		return nil
+	}
+	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
+
+	start := time.Now()
+	err := db.cleans.SaveToFileConcurrent(dir, threads)
+	if err != nil {
+		log.Error("Failed to persist clean trie cache", "error", err)
+		return err
+	}
+	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// SaveCache atomically saves fast cache data to the given dir using all
+// available CPU cores.
+func (db *Database) SaveCache(dir string) error {
+	return db.saveCache(dir, runtime.GOMAXPROCS(0))
+}
+
+// SaveCachePeriodically atomically saves fast cache data to the given dir with
+// the specified interval. All dump operation will only use a single CPU core.
+func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, stopCh <-chan struct{}) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			db.saveCache(dir, 1)
+		case <-stopCh:
+			return
+		}
+	}
 }

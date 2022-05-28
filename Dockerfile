@@ -1,21 +1,33 @@
-FROM golang:1.12-alpine as builder
+# Support setting various labels on the final image
+ARG COMMIT=""
+ARG VERSION=""
+ARG BUILDNUM=""
 
-RUN apk add --no-cache make gcc musl-dev linux-headers git
+# Build Geth in a stock Go builder container
+FROM golang:1.18-alpine as builder
 
-ADD . /XDPoSChain
-RUN cd /XDPoSChain && make XDC
+RUN apk add --no-cache gcc musl-dev linux-headers git
 
+# Get dependencies - will also be cached if we won't change go.mod/go.sum
+COPY go.mod /go-ethereum/
+COPY go.sum /go-ethereum/
+RUN cd /go-ethereum && go mod download
+
+ADD . /go-ethereum
+RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
+
+# Pull Geth into a second stage deploy alpine container
 FROM alpine:latest
 
-WORKDIR /XDPoSChain
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
-COPY --from=builder /XDPoSChain/build/bin/XDC /usr/local/bin/XDC
+EXPOSE 8545 8546 30303 30303/udp
+ENTRYPOINT ["geth"]
 
-RUN chmod +x /usr/local/bin/XDC
+# Add some metadata labels to help programatic image consumption
+ARG COMMIT=""
+ARG VERSION=""
+ARG BUILDNUM=""
 
-EXPOSE 8545
-EXPOSE 30303
-
-ENTRYPOINT ["/usr/local/bin/XDC"]
-
-CMD ["--help"]
+LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"

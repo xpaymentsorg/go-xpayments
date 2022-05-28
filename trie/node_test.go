@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ func TestDecodeNestedNode(t *testing.T) {
 	rlp.Encode(buf, fullNodeData)
 
 	if _, err := decodeNode([]byte("testdecode"), buf.Bytes()); err != nil {
-		t.Fatalf("decode nested full Node err: %v", err)
+		t.Fatalf("decode nested full node err: %v", err)
 	}
 }
 
@@ -89,6 +89,6 @@ func TestDecodeFullNode(t *testing.T) {
 
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
 	if err != nil {
-		t.Fatalf("decode full Node err: %v", err)
+		t.Fatalf("decode full node err: %v", err)
 	}
 }

@@ -60,32 +60,12 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// Delete removes a node from the set
 func (db *NodeSet) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	value, ok := db.nodes[string(key)]
-	if !ok {
-		return nil
-	}
-	keystr := string(key)
-	delete(db.nodes, keystr)
-	index := -1
-	for i, key := range db.order {
-		if key == keystr {
-			index = i
-			break
-		}
-	}
-	length := len(db.order)
-	if index == 0 {
-		db.order = db.order[index+1 : length]
-	} else if index == length-1 {
-		db.order = db.order[0 : length-1]
-	} else {
-		db.order = append(db.order[0:index], db.order[index+1:length]...)
-	}
-	db.dataSize -= len(value)
+	delete(db.nodes, string(key))
 	return nil
 }
 
@@ -144,12 +124,8 @@ func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
 	}
 }
 
-// NodeList stores an ordered list of trie nodes. It implements ethdb.Putter.
+// NodeList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
 type NodeList []rlp.RawValue
-
-func (n NodeList) Delete(key []byte) error {
-	return nil
-}
 
 // Store writes the contents of the list to the given database
 func (n NodeList) Store(db ethdb.KeyValueWriter) {
@@ -169,6 +145,11 @@ func (n NodeList) NodeSet() *NodeSet {
 func (n *NodeList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
+}
+
+// Delete panics as there's no reason to remove a node from the list.
+func (n *NodeList) Delete(key []byte) error {
+	panic("not supported")
 }
 
 // DataSize returns the aggregated data size of nodes in the list

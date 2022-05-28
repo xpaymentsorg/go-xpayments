@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// gpay is the official command-line client for xPayments.
 package main
 
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,15 +29,21 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
-	"github.com/xpaymentsorg/go-xpayments/console"
-	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/eth"
+	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
 	"github.com/xpaymentsorg/go-xpayments/ethclient"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
+	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
+	"github.com/xpaymentsorg/go-xpayments/internal/flags"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/node"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/xpaymentsorg/go-xpayments/eth/tracers/js"
+	_ "github.com/xpaymentsorg/go-xpayments/eth/tracers/native"
+
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -47,31 +54,32 @@ const (
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
+	gitDate   = ""
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the xPayments command line interface")
+	app = flags.NewApp(gitCommit, gitDate, "the go-xpayments command line interface")
 	// flags that configure the node
-	nodeFlags = []cli.Flag{
+	nodeFlags = utils.GroupFlags([]cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
-		utils.BootnodesV4Flag,
-		utils.BootnodesV5Flag,
-		utils.DataDirFlag,
+		utils.MinFreeDiskSpaceFlag,
 		utils.KeyStoreDirFlag,
-		//utils.NoUSBFlag,
-		//utils.EthashCacheDirFlag,
-		//utils.EthashCachesInMemoryFlag,
-		//utils.EthashCachesOnDiskFlag,
-		//utils.EthashDatasetDirFlag,
-		//utils.EthashDatasetsInMemoryFlag,
-		//utils.EthashDatasetsOnDiskFlag,
-		utils.XPSXEnabledFlag,
-		utils.XPSXDataDirFlag,
-		utils.XPSXDBEngineFlag,
-		utils.XPSXDBConnectionUrlFlag,
-		utils.XPSXDBReplicaSetNameFlag,
-		utils.XPSXDBNameFlag,
+		utils.ExternalSignerFlag,
+		utils.NoUSBFlag,
+		utils.USBFlag,
+		utils.SmartCardDaemonPathFlag,
+		utils.OverrideArrowGlacierFlag,
+		utils.OverrideTerminalTotalDifficulty,
+		utils.EthashCacheDirFlag,
+		utils.EthashCachesInMemoryFlag,
+		utils.EthashCachesOnDiskFlag,
+		utils.EthashCachesLockMmapFlag,
+		utils.EthashDatasetDirFlag,
+		utils.EthashDatasetsInMemoryFlag,
+		utils.EthashDatasetsOnDiskFlag,
+		utils.EthashDatasetsLockMmapFlag,
+		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -82,88 +90,133 @@ var (
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
-		utils.FastSyncFlag,
-		utils.LightModeFlag,
 		utils.SyncModeFlag,
+		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
-		//utils.LightServFlag,
-		//utils.LightPeersFlag,
-		//utils.LightKDFFlag,
-		//utils.CacheFlag,
-		//utils.CacheDatabaseFlag,
-		//utils.CacheGCFlag,
-		//utils.TrieCacheGenFlag,
+		utils.SnapshotFlag,
+		utils.TxLookupLimitFlag,
+		utils.LightServeFlag,
+		utils.LightIngressFlag,
+		utils.LightEgressFlag,
+		utils.LightMaxPeersFlag,
+		utils.LightNoPruneFlag,
+		utils.LightKDFFlag,
+		utils.UltraLightServersFlag,
+		utils.UltraLightFractionFlag,
+		utils.UltraLightOnlyAnnounceFlag,
+		utils.LightNoSyncServeFlag,
+		utils.EthRequiredBlocksFlag,
+		utils.LegacyWhitelistFlag,
+		utils.BloomFilterSizeFlag,
+		utils.CacheFlag,
+		utils.CacheDatabaseFlag,
+		utils.CacheTrieFlag,
+		utils.CacheTrieJournalFlag,
+		utils.CacheTrieRejournalFlag,
+		utils.CacheGCFlag,
+		utils.CacheSnapshotFlag,
+		utils.CacheNoPrefetchFlag,
+		utils.CachePreimagesFlag,
+		utils.FDLimitFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.GasPriceFlag,
-		utils.StakerThreadsFlag,
-		utils.StakingEnabledFlag,
-		utils.TargetGasLimitFlag,
+		utils.MiningEnabledFlag,
+		utils.MinerThreadsFlag,
+		utils.MinerNotifyFlag,
+		utils.LegacyMinerGasTargetFlag,
+		utils.MinerGasLimitFlag,
+		utils.MinerGasPriceFlag,
+		utils.MinerEtherbaseFlag,
+		utils.MinerExtraDataFlag,
+		utils.MinerRecommitIntervalFlag,
+		utils.MinerNoVerifyFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
-		//utils.DiscoveryV5Flag,
-		//utils.NetrestrictFlag,
+		utils.DiscoveryV5Flag,
+		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
-		//utils.DeveloperFlag,
-		//utils.DeveloperPeriodFlag,
-		//utils.TestnetFlag,
-		//utils.RinkebyFlag,
-		//utils.VMEnableDebugFlag,
-		utils.XPSTestnetFlag,
-		utils.RewoundFlag,
+		utils.DNSDiscoveryFlag,
+		utils.DeveloperFlag,
+		utils.DeveloperPeriodFlag,
+		utils.DeveloperGasLimitFlag,
+		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
-		utils.MetricsEnabledFlag,
-		//utils.FakePoWFlag,
-		//utils.NoCompactionFlag,
-		//utils.GpoBlocksFlag,
-		//utils.GpoPercentileFlag,
-		//utils.ExtraDataFlag,
+		utils.FakePoWFlag,
+		utils.NoCompactionFlag,
+		utils.GpoBlocksFlag,
+		utils.GpoPercentileFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.GpoIgnoreGasPriceFlag,
+		utils.MinerNotifyFullFlag,
 		configFileFlag,
-		utils.AnnounceTxsFlag,
-		utils.StoreRewardFlag,
-		utils.RollbackFlag,
-		utils.XPSSlaveModeFlag,
-	}
+	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
 	rpcFlags = []cli.Flag{
-		utils.RPCEnabledFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCPortFlag,
-		utils.RPCApiFlag,
+		utils.HTTPEnabledFlag,
+		utils.HTTPListenAddrFlag,
+		utils.HTTPPortFlag,
+		utils.HTTPCORSDomainFlag,
+		utils.AuthListenFlag,
+		utils.AuthPortFlag,
+		utils.AuthVirtualHostsFlag,
+		utils.JWTSecretFlag,
+		utils.HTTPVirtualHostsFlag,
+		utils.GraphQLEnabledFlag,
+		utils.GraphQLCORSDomainFlag,
+		utils.GraphQLVirtualHostsFlag,
+		utils.HTTPApiFlag,
+		utils.HTTPPathPrefixFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
 		utils.WSPortFlag,
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
+		utils.WSPathPrefixFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
+		utils.InsecureUnlockAllowedFlag,
+		utils.RPCGlobalGasCapFlag,
+		utils.RPCGlobalEVMTimeoutFlag,
+		utils.RPCGlobalTxFeeCapFlag,
+		utils.AllowUnprotectedTxs,
 	}
 
-	whisperFlags = []cli.Flag{
-		utils.WhisperEnabledFlag,
-		utils.WhisperMaxMessageSizeFlag,
-		utils.WhisperMinPOWFlag,
+	metricsFlags = []cli.Flag{
+		utils.MetricsEnabledFlag,
+		utils.MetricsEnabledExpensiveFlag,
+		utils.MetricsHTTPFlag,
+		utils.MetricsPortFlag,
+		utils.MetricsEnableInfluxDBFlag,
+		utils.MetricsInfluxDBEndpointFlag,
+		utils.MetricsInfluxDBDatabaseFlag,
+		utils.MetricsInfluxDBUsernameFlag,
+		utils.MetricsInfluxDBPasswordFlag,
+		utils.MetricsInfluxDBTagsFlag,
+		utils.MetricsEnableInfluxDBV2Flag,
+		utils.MetricsInfluxDBTokenFlag,
+		utils.MetricsInfluxDBBucketFlag,
+		utils.MetricsInfluxDBOrganizationFlag,
 	}
 )
 
 func init() {
-	// Initialize the CLI app and start gpay
+	// Initialize the CLI app and start Gpay
 	app.Action = gpay
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright (c) 2022 xPayments"
+	app.Copyright = "Copyright 2021-2022 The go-xpayments Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
 		importCommand,
 		exportCommand,
+		importPreimagesCommand,
+		exportPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
+		dumpGenesisCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -172,33 +225,34 @@ func init() {
 		attachCommand,
 		javascriptCommand,
 		// See misccmd.go:
+		makecacheCommand,
+		makedagCommand,
 		versionCommand,
+		versionCheckCommand,
+		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		// see dbcmd.go
+		dbCommand,
+		// See cmd/utils/flags_legacy.go
+		utils.ShowDeprecated,
+		// See snapshot.go
+		snapshotCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
-	app.Flags = append(app.Flags, nodeFlags...)
-	app.Flags = append(app.Flags, rpcFlags...)
-	app.Flags = append(app.Flags, consoleFlags...)
-	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, whisperFlags...)
+	app.Flags = utils.GroupFlags(nodeFlags,
+		rpcFlags,
+		consoleFlags,
+		debug.Flags,
+		metricsFlags)
 
 	app.Before = func(ctx *cli.Context) error {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx); err != nil {
-			return err
-		}
-		// Start system runtime metrics collection
-		go metrics.CollectProcessMetrics(3 * time.Second)
-
-		utils.SetupNetwork(ctx)
-		return nil
+		return debug.Setup(ctx)
 	}
-
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
-		console.Stdin.Close() // Resets terminal mode.
+		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }
@@ -210,51 +264,115 @@ func main() {
 	}
 }
 
+// prepare manipulates memory cache allowance and setups metric system.
+// This function should be called before launching devp2p stack.
+func prepare(ctx *cli.Context) {
+	// If we're running a known preset, log it for convenience.
+	switch {
+	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
+		log.Info("Starting Gpay on Ropsten testnet...")
+
+	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
+		log.Info("Starting Gpay on Rinkeby testnet...")
+
+	case ctx.GlobalIsSet(utils.GoerliFlag.Name):
+		log.Info("Starting Gpay on Görli testnet...")
+
+	case ctx.GlobalIsSet(utils.SepoliaFlag.Name):
+		log.Info("Starting Gpay on Sepolia testnet...")
+
+	case ctx.GlobalIsSet(utils.KilnFlag.Name):
+		log.Info("Starting Gpay on Kiln testnet...")
+
+	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
+		log.Info("Starting Gpay in ephemeral dev mode...")
+		log.Warn(`You are running Gpay in --dev mode. Please note the following:
+
+  1. This mode is only intended for fast, iterative development without assumptions on
+     security or persistence.
+  2. The database is created in memory unless specified otherwise. Therefore, shutting down
+     your computer or losing power will wipe your entire block data and chain state for
+     your dev environment.
+  3. A random, pre-allocated developer account will be available and unlocked as
+     eth.coinbase, which can be used for testing. The random dev account is temporary,
+     stored on a ramdisk, and will be lost if your machine is restarted.
+  4. Mining is enabled by default. However, the client will only seal blocks if transactions
+     are pending in the mempool. The miner's minimum accepted gas price is 1.
+  5. Networking is disabled; there is no listen-address, the maximum number of peers is set
+     to 0, and discovery is disabled.
+`)
+
+	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
+		log.Info("Starting Gpay on xPayments mainnet...")
+	}
+	// If we're a full node on mainnet without --cache specified, bump default cache allowance
+	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
+		// Make sure we're not on any supported preconfigured testnet either
+		if !ctx.GlobalIsSet(utils.RopstenFlag.Name) &&
+			!ctx.GlobalIsSet(utils.SepoliaFlag.Name) &&
+			!ctx.GlobalIsSet(utils.RinkebyFlag.Name) &&
+			!ctx.GlobalIsSet(utils.GoerliFlag.Name) &&
+			!ctx.GlobalIsSet(utils.KilnFlag.Name) &&
+			!ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+			// Nope, we're really on mainnet. Bump that cache up!
+			log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
+			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
+		}
+	}
+	// If we're running a light client on any network, drop the cache to some meaningfully low amount
+	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) {
+		log.Info("Dropping default light client cache", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 128)
+		ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(128))
+	}
+
+	// Start metrics export if enabled
+	utils.SetupMetrics(ctx)
+
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
+}
+
 // gpay is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func gpay(ctx *cli.Context) error {
-	node, cfg := makeFullNode(ctx)
-	startNode(ctx, node, cfg)
-	node.Wait()
+	if args := ctx.Args(); len(args) > 0 {
+		return fmt.Errorf("invalid command: %q", args[0])
+	}
+
+	prepare(ctx)
+	stack, backend := makeFullNode(ctx)
+	defer stack.Close()
+
+	startNode(ctx, stack, backend, false)
+	stack.Wait()
 	return nil
 }
 
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
+func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isConsole bool) {
+	debug.Memsize.Add("node", stack)
+
 	// Start up the node itself
-	utils.StartNode(stack)
+	utils.StartNode(ctx, stack, isConsole)
 
 	// Unlock any account specifically requested
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	unlockAccounts(ctx, stack)
 
-	if ctx.GlobalIsSet(utils.UnlockedAccountFlag.Name) {
-		cfg.Account.Unlocks = strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	}
-
-	if ctx.GlobalIsSet(utils.PasswordFileFlag.Name) {
-		cfg.Account.Passwords = utils.MakePasswordList(ctx)
-	}
-
-	for i, account := range cfg.Account.Unlocks {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, ks, trimmed, i, cfg.Account.Passwords)
-		}
-	}
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
 
-	go func() {
-		// Create an chain state reader for self-derivation
-		rpcClient, err := stack.Attach()
-		if err != nil {
-			utils.Fatalf("Failed to attach to self: %v", err)
-		}
-		stateReader := ethclient.NewClient(rpcClient)
+	// Create a client to interact with local gpay node.
+	rpcClient, err := stack.Attach()
+	if err != nil {
+		utils.Fatalf("Failed to attach to self: %v", err)
+	}
+	ethClient := ethclient.NewClient(rpcClient)
 
+	go func() {
 		// Open any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
 			if err := wallet.Open(""); err != nil {
@@ -272,11 +390,13 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
 				status, _ := event.Wallet.Status()
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
 
+				var derivationPaths []accounts.DerivationPath
 				if event.Wallet.URL().Scheme == "ledger" {
-					event.Wallet.SelfDerive(accounts.DefaultLedgerBaseDerivationPath, stateReader)
-				} else {
-					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+					derivationPaths = append(derivationPaths, accounts.LegacyLedgerBaseDerivationPath)
 				}
+				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
+
+				event.Wallet.SelfDerive(derivationPaths, ethClient)
 
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
@@ -284,103 +404,73 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
 			}
 		}
 	}()
-	// Start auxiliary services if enabled
 
-	// Mining only makes sense if a full Ethereum node is running
-	if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-		utils.Fatalf("Light clients do not support staking")
-	}
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		utils.Fatalf("Ethereum service not running: %v", err)
-	}
-	if _, ok := ethereum.Engine().(*XPoS.XPoS); ok {
+	// Spawn a standalone goroutine for status synchronization monitoring,
+	// close the node when synchronization is complete if user required.
+	if ctx.GlobalBool(utils.ExitWhenSyncedFlag.Name) {
 		go func() {
-			started := false
-			ok := false
-			slaveMode := ctx.GlobalIsSet(utils.XPSSlaveModeFlag.Name)
-			var err error
-			if common.IsTestnet {
-				ok, err = ethereum.ValidateMasternodeTestnet()
-				if err != nil {
-					utils.Fatalf("Can't verify masternode permission: %v", err)
+			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
+			defer sub.Unsubscribe()
+			for {
+				event := <-sub.Chan()
+				if event == nil {
+					continue
 				}
-			} else {
-				ok, err = ethereum.ValidateMasternode()
-				if err != nil {
-					utils.Fatalf("Can't verify masternode permission: %v", err)
-				}
-			}
-			if ok {
-				if slaveMode {
-					log.Info("Masternode slave mode found.")
-					started = false
-				} else {
-					log.Info("Masternode found. Enabling staking mode...")
-					// Use a reduced number of threads if requested
-					if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
-						type threaded interface {
-							SetThreads(threads int)
-						}
-						if th, ok := ethereum.Engine().(threaded); ok {
-							th.SetThreads(threads)
-						}
-					}
-					// Set the gas price to the limits from the CLI and start mining
-					ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-					if err := ethereum.StartStaking(true); err != nil {
-						utils.Fatalf("Failed to start staking: %v", err)
-					}
-					started = true
-					log.Info("Enabled staking node!!!")
-				}
-			}
-			defer close(core.CheckpointCh)
-			for range core.CheckpointCh {
-				log.Info("Checkpoint!!! It's time to reconcile node's state...")
-				if common.IsTestnet {
-					ok, err = ethereum.ValidateMasternodeTestnet()
-					if err != nil {
-						utils.Fatalf("Can't verify masternode permission: %v", err)
-					}
-				} else {
-					ok, err = ethereum.ValidateMasternode()
-					if err != nil {
-						utils.Fatalf("Can't verify masternode permission: %v", err)
-					}
-				}
+				done, ok := event.Data.(downloader.DoneEvent)
 				if !ok {
-					if started {
-						log.Info("Only masternode can propose and verify blocks. Cancelling staking on this node...")
-						ethereum.StopStaking()
-						started = false
-						log.Info("Cancelled mining mode!!!")
-					}
-				} else if !started {
-					if slaveMode {
-						log.Info("Masternode slave mode found.")
-						started = false
-					} else {
-						log.Info("Masternode found. Enabling staking mode...")
-						// Use a reduced number of threads if requested
-						if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
-							type threaded interface {
-								SetThreads(threads int)
-							}
-							if th, ok := ethereum.Engine().(threaded); ok {
-								th.SetThreads(threads)
-							}
-						}
-						// Set the gas price to the limits from the CLI and start mining
-						ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-						if err := ethereum.StartStaking(true); err != nil {
-							utils.Fatalf("Failed to start staking: %v", err)
-						}
-						started = true
-						log.Info("Enabled staking node!!!")
-					}
+					continue
+				}
+				if timestamp := time.Unix(int64(done.Latest.Time), 0); time.Since(timestamp) < 10*time.Minute {
+					log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
+						"age", common.PrettyAge(timestamp))
+					stack.Close()
 				}
 			}
 		}()
+	}
+
+	// Start auxiliary services if enabled
+	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
+		// Mining only makes sense if a full xPayments node is running
+		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+			utils.Fatalf("Light clients do not support mining")
+		}
+		ethBackend, ok := backend.(*eth.EthAPIBackend)
+		if !ok {
+			utils.Fatalf("xPayments service not running")
+		}
+		// Set the gas price to the limits from the CLI and start mining
+		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+		ethBackend.TxPool().SetGasPrice(gasprice)
+		// start mining
+		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		if err := ethBackend.StartMining(threads); err != nil {
+			utils.Fatalf("Failed to start mining: %v", err)
+		}
+	}
+}
+
+// unlockAccounts unlocks any account specifically requested.
+func unlockAccounts(ctx *cli.Context, stack *node.Node) {
+	var unlocks []string
+	inputs := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	for _, input := range inputs {
+		if trimmed := strings.TrimSpace(input); trimmed != "" {
+			unlocks = append(unlocks, trimmed)
+		}
+	}
+	// Short circuit if there is no account to unlock.
+	if len(unlocks) == 0 {
+		return
+	}
+	// If insecure account unlocking is not allowed if node's APIs are exposed to external.
+	// Print warning log to user and skip unlocking.
+	if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
+		utils.Fatalf("Account unlock with HTTP access is forbidden!")
+	}
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	passwords := utils.MakePasswordList(ctx)
+	for i, account := range unlocks {
+		unlockAccount(ks, account, i, passwords)
 	}
 }

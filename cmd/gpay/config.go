@@ -20,24 +20,26 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"reflect"
-	"strings"
 	"unicode"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/naoina/toml"
-	"github.com/xpaymentsorg/go-xpayments/XPSx"
+	"github.com/xpaymentsorg/go-xpayments/accounts/external"
+	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
+	"github.com/xpaymentsorg/go-xpayments/accounts/scwallet"
+	"github.com/xpaymentsorg/go-xpayments/accounts/usbwallet"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/eth"
-	"github.com/xpaymentsorg/go-xpayments/internal/debug"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
+	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
+	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
 	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -46,7 +48,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...), whisperFlags...),
+		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
@@ -66,7 +68,12 @@ var tomlSettings = toml.Config{
 		return field
 	},
 	MissingField: func(rt reflect.Type, field string) error {
-		link := ""
+		id := fmt.Sprintf("%s.%s", rt.String(), field)
+		if deprecated(id) {
+			log.Warn("Config field is deprecated and won't have an effect", "name", id)
+			return nil
+		}
+		var link string
 		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
 			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
 		}
@@ -75,38 +82,23 @@ var tomlSettings = toml.Config{
 }
 
 type ethstatsConfig struct {
-	URL string
+	URL string `toml:",omitempty"`
 }
 
-type account struct {
-	Unlocks   []string
-	Passwords []string
+type gpayConfig struct {
+	Eth      ethconfig.Config
+	Node     node.Config
+	Ethstats ethstatsConfig
+	Metrics  metrics.Config
 }
 
-type Bootnodes struct {
-	Mainnet []string
-	Testnet []string
-}
-
-type XPSConfig struct {
-	Eth         eth.Config
-	Shh         whisper.Config
-	Node        node.Config
-	Ethstats    ethstatsConfig
-	XPSX        XPSx.Config
-	Account     account
-	StakeEnable bool
-	Bootnodes   Bootnodes
-	Verbosity   int
-	NAT         string
-}
-
-func loadConfig(file string, cfg *XPSConfig) error {
+func loadConfig(file string, cfg *gpayConfig) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+
 	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
 	// Add file name to errors that have a line number.
 	if _, ok := err.(*toml.LineError); ok {
@@ -118,83 +110,28 @@ func loadConfig(file string, cfg *XPSConfig) error {
 func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
-	cfg.Version = params.VersionWithCommit(gitCommit)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
-	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
+	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
+	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "gpay.ipc"
 	return cfg
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, XPSConfig) {
+// makeConfigNode loads gpay configuration and creates a blank node instance.
+func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	// Load defaults.
-	cfg := XPSConfig{
-		Eth:         eth.DefaultConfig,
-		Shh:         whisper.DefaultConfig,
-		XPSX:        XPSx.DefaultConfig,
-		Node:        defaultNodeConfig(),
-		StakeEnable: true,
-		Verbosity:   3,
-		NAT:         "",
+	cfg := gpayConfig{
+		Eth:     ethconfig.Defaults,
+		Node:    defaultNodeConfig(),
+		Metrics: metrics.DefaultConfig,
 	}
+
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
-	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
-		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
-	}
-	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
-		debug.Glogger.Verbosity(log.Lvl(cfg.Verbosity))
-	}
-
-	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
-		ctx.Set(utils.NATFlag.Name, cfg.NAT)
-	}
-
-	// Check testnet is enable.
-	if ctx.GlobalBool(utils.XPSTestnetFlag.Name) {
-		common.IsTestnet = true
-		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
-		cfg.Eth.NetworkId = 51
-		common.RelayerRegistrationSMC = common.RelayerRegistrationSMCTestnet
-		common.TIPTRC21Fee = common.TIPXPSXTestnet
-		common.TIPTRC21Fee = common.TIPTRC21FeeTestnet
-		common.TIPXPSXCancellationFee = common.TIPXPSXCancellationFeeTestnet
-	}
-
-	// Rewound
-	if rewound := ctx.GlobalInt(utils.RewoundFlag.Name); rewound != 0 {
-		common.Rewound = uint64(rewound)
-	}
-
-	// Check rollback hash exist.
-	if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
-		common.RollbackHash = common.HexToHash(rollbackHash)
-	}
-
-	// Check GasPrice
-	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
-	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
-		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
-			common.MinGasPrice = big.NewInt(gasPrice)
-		}
-	}
-
-	// read passwords from environment
-	passwords := []string{}
-	for _, env := range cfg.Account.Passwords {
-		if trimmed := strings.TrimSpace(env); trimmed != "" {
-			value := os.Getenv(trimmed)
-			for _, info := range strings.Split(value, ",") {
-				if trimmed2 := strings.TrimSpace(info); trimmed2 != "" {
-					passwords = append(passwords, trimmed2)
-				}
-			}
-		}
-	}
-	cfg.Account.Passwords = passwords
 
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
@@ -202,66 +139,56 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XPSConfig) {
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
+	// Node doesn't by default populate account manager backends
+	if err := setAccountManagerBackends(stack); err != nil {
+		utils.Fatalf("Failed to set account manager backends: %v", err)
+	}
+
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
+	applyMetricConfig(ctx, &cfg)
 
-	utils.SetShhConfig(ctx, stack, &cfg.Shh)
-	utils.SetXPSXConfig(ctx, &cfg.XPSX, cfg.Node.DataDir)
 	return stack, cfg
 }
 
-func applyValues(values []string, params *[]string) {
-	data := []string{}
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			data = append(data, trimmed)
-		}
-	}
-	if len(data) > 0 {
-		*params = data
-	}
-
-}
-
-// enableWhisper returns true in case one of the whisper flags is set.
-func enableWhisper(ctx *cli.Context) bool {
-	for _, flag := range whisperFlags {
-		if ctx.GlobalIsSet(flag.GetName()) {
-			return true
-		}
-	}
-	return false
-}
-
-func makeFullNode(ctx *cli.Context) (*node.Node, XPSConfig) {
+// makeFullNode loads gpay configuration and creates the xPayments backend.
+func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-
-	// Register XPSX's OrderBook service if requested.
-	// enable in default
-	utils.RegisterXPSXService(stack, &cfg.XPSX)
-	utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
-	shhEnabled := enableWhisper(ctx)
-	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
-	if shhEnabled || shhAutoEnabled {
-		if ctx.GlobalIsSet(utils.WhisperMaxMessageSizeFlag.Name) {
-			cfg.Shh.MaxMessageSize = uint32(ctx.Int(utils.WhisperMaxMessageSizeFlag.Name))
+	if ctx.GlobalIsSet(utils.OverrideArrowGlacierFlag.Name) {
+		cfg.Eth.OverrideArrowGlacier = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideArrowGlacierFlag.Name))
+	}
+	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
+		cfg.Eth.OverrideTerminalTotalDifficulty = utils.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
+	}
+	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+	// Warn users to migrate if they have a legacy freezer format.
+	if eth != nil {
+		firstIdx := uint64(0)
+		// Hack to speed up check for mainnet because we know
+		// the first non-empty block.
+		ghash := rawdb.ReadCanonicalHash(eth.ChainDb(), 0)
+		if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
+			firstIdx = 46147
 		}
-		if ctx.GlobalIsSet(utils.WhisperMinPOWFlag.Name) {
-			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(utils.WhisperMinPOWFlag.Name)
+		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
+		if err != nil {
+			log.Error("Failed to check db for legacy receipts", "err", err)
+		} else if isLegacy {
+			log.Warn("Database has receipts with a legacy format. Please run `gpay db freezer-migrate`.")
 		}
-		utils.RegisterShhService(stack, &cfg.Shh)
 	}
 
-	// Add the Ethereum Stats daemon if requested.
+	// Configure GraphQL if requested
+	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
+		utils.RegisterGraphQLService(stack, backend, cfg.Node)
+	}
+	// Add the xPayments Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
+		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
-
-	return stack, cfg
+	return stack, backend
 }
 
 // dumpConfig is the dumpconfig command.
@@ -278,7 +205,132 @@ func dumpConfig(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	io.WriteString(os.Stdout, comment)
-	os.Stdout.Write(out)
+
+	dump := os.Stdout
+	if ctx.NArg() > 0 {
+		dump, err = os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		defer dump.Close()
+	}
+	dump.WriteString(comment)
+	dump.Write(out)
+
+	return nil
+}
+
+func applyMetricConfig(ctx *cli.Context, cfg *gpayConfig) {
+	if ctx.GlobalIsSet(utils.MetricsEnabledFlag.Name) {
+		cfg.Metrics.Enabled = ctx.GlobalBool(utils.MetricsEnabledFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsEnabledExpensiveFlag.Name) {
+		cfg.Metrics.EnabledExpensive = ctx.GlobalBool(utils.MetricsEnabledExpensiveFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsHTTPFlag.Name) {
+		cfg.Metrics.HTTP = ctx.GlobalString(utils.MetricsHTTPFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsPortFlag.Name) {
+		cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
+		cfg.Metrics.EnableInfluxDB = ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBEndpointFlag.Name) {
+		cfg.Metrics.InfluxDBEndpoint = ctx.GlobalString(utils.MetricsInfluxDBEndpointFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBDatabaseFlag.Name) {
+		cfg.Metrics.InfluxDBDatabase = ctx.GlobalString(utils.MetricsInfluxDBDatabaseFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBUsernameFlag.Name) {
+		cfg.Metrics.InfluxDBUsername = ctx.GlobalString(utils.MetricsInfluxDBUsernameFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBPasswordFlag.Name) {
+		cfg.Metrics.InfluxDBPassword = ctx.GlobalString(utils.MetricsInfluxDBPasswordFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBTagsFlag.Name) {
+		cfg.Metrics.InfluxDBTags = ctx.GlobalString(utils.MetricsInfluxDBTagsFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
+		cfg.Metrics.EnableInfluxDBV2 = ctx.GlobalBool(utils.MetricsEnableInfluxDBV2Flag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBTokenFlag.Name) {
+		cfg.Metrics.InfluxDBToken = ctx.GlobalString(utils.MetricsInfluxDBTokenFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBBucketFlag.Name) {
+		cfg.Metrics.InfluxDBBucket = ctx.GlobalString(utils.MetricsInfluxDBBucketFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
+		cfg.Metrics.InfluxDBOrganization = ctx.GlobalString(utils.MetricsInfluxDBOrganizationFlag.Name)
+	}
+}
+
+func deprecated(field string) bool {
+	switch field {
+	case "ethconfig.Config.EVMInterpreter":
+		return true
+	case "ethconfig.Config.EWASMInterpreter":
+		return true
+	default:
+		return false
+	}
+}
+
+func setAccountManagerBackends(stack *node.Node) error {
+	conf := stack.Config()
+	am := stack.AccountManager()
+	keydir := stack.KeyStoreDir()
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if conf.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
+
+	// Assemble the supported backends
+	if len(conf.ExternalSigner) > 0 {
+		log.Info("Using external signer", "url", conf.ExternalSigner)
+		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
+			am.AddBackend(extapi)
+			return nil
+		} else {
+			return fmt.Errorf("error connecting to external signer: %v", err)
+		}
+	}
+
+	// For now, we're using EITHER external signer OR local signers.
+	// If/when we implement some form of lockfile for USB and keystore wallets,
+	// we can have both, but it's very confusing for the user to see the same
+	// accounts in both externally and locally, plus very racey.
+	am.AddBackend(keystore.NewKeyStore(keydir, scryptN, scryptP))
+	if conf.USB {
+		// Start a USB hub for Ledger hardware wallets
+		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+		} else {
+			am.AddBackend(ledgerhub)
+		}
+		// Start a USB hub for Trezor hardware wallets (HID version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithHID(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
+		} else {
+			am.AddBackend(trezorhub)
+		}
+		// Start a USB hub for Trezor hardware wallets (WebUSB version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithWebUSB(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
+		} else {
+			am.AddBackend(trezorhub)
+		}
+	}
+	if len(conf.SmartCardDaemonPath) > 0 {
+		// Start a smart card hub
+		if schub, err := scwallet.NewHub(conf.SmartCardDaemonPath, scwallet.Scheme, keydir); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
+		} else {
+			am.AddBackend(schub)
+		}
+	}
+
 	return nil
 }

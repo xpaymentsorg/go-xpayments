@@ -17,7 +17,6 @@
 package keystore
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +31,7 @@ import (
 type fileCache struct {
 	all     mapset.Set // Set of all files from the keystore folder
 	lastMod time.Time  // Last time instance when a file was modified
-	mu      sync.RWMutex
+	mu      sync.Mutex
 }
 
 // scan performs a new scan on the given directory, compares against the already
@@ -41,7 +40,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 	t0 := time.Now()
 
 	// List all the failes from the keystore folder
-	files, err := ioutil.ReadDir(keyDir)
+	files, err := os.ReadDir(keyDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -56,16 +55,20 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 
 	var newLastMod time.Time
 	for _, fi := range files {
-		// Skip any non-key files from the folder
 		path := filepath.Join(keyDir, fi.Name())
-		if skipKeyFile(fi) {
+		// Skip any non-key files from the folder
+		if nonKeyFile(fi) {
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
 		// Gather the set of all and fresly modified files
 		all.Add(path)
 
-		modified := fi.ModTime()
+		info, err := fi.Info()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		modified := info.ModTime()
 		if modified.After(fc.lastMod) {
 			mods.Add(path)
 		}
@@ -88,14 +91,14 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 	return creates, deletes, updates, nil
 }
 
-// skipKeyFile ignores editor backups, hidden files and folders/symlinks.
-func skipKeyFile(fi os.FileInfo) bool {
+// nonKeyFile ignores editor backups, hidden files and folders/symlinks.
+func nonKeyFile(fi os.DirEntry) bool {
 	// Skip editor backups and UNIX-style hidden files.
 	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
 		return true
 	}
 	// Skip misc special files, directories (yes, symlinks too).
-	if fi.IsDir() || fi.Mode()&os.ModeType != 0 {
+	if fi.IsDir() || !fi.Type().IsRegular() {
 		return true
 	}
 	return false

@@ -19,15 +19,11 @@ package core
 import (
 	"fmt"
 
-	"github.com/xpaymentsorg/go-xpayments/XPSx/tradingstate"
-	"github.com/xpaymentsorg/go-xpayments/XPSxlending/lendingstate"
-	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/trie"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -50,19 +46,13 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 	return validator
 }
 
-// ValidateBody validates the given block's uncles and verifies the the block
+// ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
-	if v.bc.HasBlockAndFullState(block.Hash(), block.NumberU64()) {
+	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
-	}
-	if !v.bc.HasBlockAndFullState(block.ParentHash(), block.NumberU64()-1) {
-		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-			return consensus.ErrUnknownAncestor
-		}
-		return consensus.ErrPrunedAncestor
 	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
@@ -72,8 +62,14 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
 		return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash)
 	}
-	if hash := types.DeriveSha(block.Transactions()); hash != header.TxHash {
+	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash)
+	}
+	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
+		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+			return consensus.ErrUnknownAncestor
+		}
+		return consensus.ErrPrunedAncestor
 	}
 	return nil
 }
@@ -82,7 +78,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
 	header := block.Header()
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
@@ -93,8 +89,8 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
-	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
-	receiptSha := types.DeriveSha(receipts)
+	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
+	receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
@@ -106,152 +102,28 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	return nil
 }
 
-func (v *BlockValidator) ValidateTradingOrder(statedb *state.StateDB, XPSxStatedb *tradingstate.TradingStateDB, txMatchBatch tradingstate.TxMatchBatch, coinbase common.Address, header *types.Header) error {
-	XPoSEngine, ok := v.bc.Engine().(*XPoS.XPoS)
-	if XPoSEngine == nil || !ok {
-		return ErrNotXPoS
+// CalcGasLimit computes the gas limit of the next block after parent. It aims
+// to keep the baseline gas close to the provided target, and increase it towards
+// the target if the baseline gas is lower.
+func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
+	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
+	limit := parentGasLimit
+	if desiredLimit < params.MinGasLimit {
+		desiredLimit = params.MinGasLimit
 	}
-	XPSXService := XPoSEngine.GetXPSXService()
-	if XPSXService == nil {
-		return fmt.Errorf("XPSx not found")
-	}
-	log.Debug("verify matching transaction found a TxMatches Batch", "numTxMatches", len(txMatchBatch.Data))
-	tradingResult := map[common.Hash]tradingstate.MatchingResult{}
-	for _, txMatch := range txMatchBatch.Data {
-		// verify orderItem
-		order, err := txMatch.DecodeOrder()
-		if err != nil {
-			log.Error("transaction match is corrupted. Failed decode order", "err", err)
-			continue
+	// If we're outside our allowed gas range, we try to hone towards them
+	if limit < desiredLimit {
+		limit = parentGasLimit + delta
+		if limit > desiredLimit {
+			limit = desiredLimit
 		}
-
-		log.Debug("process tx match", "order", order)
-		// process Matching Engine
-		newTrades, newRejectedOrders, err := XPSXService.ApplyOrder(header, coinbase, v.bc, statedb, XPSxStatedb, tradingstate.GetTradingOrderBookHash(order.BaseToken, order.QuoteToken), order)
-		if err != nil {
-			return err
-		}
-		tradingResult[tradingstate.GetMatchingResultCacheKey(order)] = tradingstate.MatchingResult{
-			Trades:  newTrades,
-			Rejects: newRejectedOrders,
-		}
+		return limit
 	}
-	if XPSXService.IsSDKNode() {
-		v.bc.AddMatchingResult(txMatchBatch.TxHash, tradingResult)
-	}
-	return nil
-}
-
-func (v *BlockValidator) ValidateLendingOrder(statedb *state.StateDB, lendingStateDb *lendingstate.LendingStateDB, XPSxStatedb *tradingstate.TradingStateDB, batch lendingstate.TxLendingBatch, coinbase common.Address, header *types.Header) error {
-	XPoSEngine, ok := v.bc.Engine().(*XPoS.XPoS)
-	if XPoSEngine == nil || !ok {
-		return ErrNotXPoS
-	}
-	XPSXService := XPoSEngine.GetXPSXService()
-	if XPSXService == nil {
-		return fmt.Errorf("XPSx not found")
-	}
-	lendingService := XPoSEngine.GetLendingService()
-	if lendingService == nil {
-		return fmt.Errorf("lendingService not found")
-	}
-	log.Debug("verify lendingItem ", "numItems", len(batch.Data))
-	lendingResult := map[common.Hash]lendingstate.MatchingResult{}
-	for _, l := range batch.Data {
-		// verify lendingItem
-
-		log.Debug("process lending tx", "lendingItem", lendingstate.ToJSON(l))
-		// process Matching Engine
-		newTrades, newRejectedOrders, err := lendingService.ApplyOrder(header, coinbase, v.bc, statedb, lendingStateDb, XPSxStatedb, lendingstate.GetLendingOrderBookHash(l.LendingToken, l.Term), l)
-		if err != nil {
-			return err
-		}
-		lendingResult[lendingstate.GetLendingCacheKey(l)] = lendingstate.MatchingResult{
-			Trades:  newTrades,
-			Rejects: newRejectedOrders,
-		}
-	}
-	if XPSXService.IsSDKNode() {
-		v.bc.AddLendingResult(batch.TxHash, lendingResult)
-	}
-	return nil
-}
-
-// CalcGasLimit computes the gas limit of the next block after parent.
-// This is miner strategy, not consensus protocol.
-func CalcGasLimit(parent *types.Block) uint64 {
-	// contrib = (parentGasUsed * 3 / 2) / 1024
-	contrib := (parent.GasUsed() + parent.GasUsed()/2) / params.GasLimitBoundDivisor
-
-	// decay = parentGasLimit / 1024 -1
-	decay := parent.GasLimit()/params.GasLimitBoundDivisor - 1
-
-	/*
-		strategy: gasLimit of block-to-mine is set based on parent's
-		gasUsed value.  if parentGasUsed > parentGasLimit * (2/3) then we
-		increase it, otherwise lower it (or leave it unchanged if it's right
-		at that usage) the amount increased/decreased depends on how far away
-		from parentGasLimit * (2/3) parentGasUsed is.
-	*/
-	limit := parent.GasLimit() - decay + contrib
-	if limit < params.MinGasLimit {
-		limit = params.MinGasLimit
-	}
-	// however, if we're now below the target (TargetGasLimit) we increase the
-	// limit as much as we can (parentGasLimit / 1024 -1)
-	if limit < params.TargetGasLimit {
-		limit = parent.GasLimit() + decay
-		if limit > params.TargetGasLimit {
-			limit = params.TargetGasLimit
+	if limit > desiredLimit {
+		limit = parentGasLimit - delta
+		if limit < desiredLimit {
+			limit = desiredLimit
 		}
 	}
 	return limit
-}
-
-func ExtractTradingTransactions(transactions types.Transactions) ([]tradingstate.TxMatchBatch, error) {
-	txMatchBatchData := []tradingstate.TxMatchBatch{}
-	for _, tx := range transactions {
-		if tx.IsTradingTransaction() {
-			txMatchBatch, err := tradingstate.DecodeTxMatchesBatch(tx.Data())
-			if err != nil {
-				log.Error("transaction match is corrupted. Failed to decode txMatchBatch", "err", err, "txHash", tx.Hash().Hex())
-				continue
-			}
-			txMatchBatch.TxHash = tx.Hash()
-			txMatchBatchData = append(txMatchBatchData, txMatchBatch)
-		}
-	}
-	return txMatchBatchData, nil
-}
-
-func ExtractLendingTransactions(transactions types.Transactions) ([]lendingstate.TxLendingBatch, error) {
-	batchData := []lendingstate.TxLendingBatch{}
-	for _, tx := range transactions {
-		if tx.IsLendingTransaction() {
-			txMatchBatch, err := lendingstate.DecodeTxLendingBatch(tx.Data())
-			if err != nil {
-				log.Error("transaction match is corrupted. Failed to decode lendingTransaction", "err", err, "txHash", tx.Hash().Hex())
-				continue
-			}
-			txMatchBatch.TxHash = tx.Hash()
-			batchData = append(batchData, txMatchBatch)
-		}
-	}
-	return batchData, nil
-}
-
-func ExtractLendingFinalizedTradeTransactions(transactions types.Transactions) (lendingstate.FinalizedResult, error) {
-	for _, tx := range transactions {
-		if tx.IsLendingFinalizedTradeTransaction() {
-			finalizedTrades, err := lendingstate.DecodeFinalizedResult(tx.Data())
-			if err != nil {
-				log.Error("transaction is corrupted. Failed to decode LendingClosedTradeTransaction", "err", err, "txHash", tx.Hash().Hex())
-				continue
-			}
-			finalizedTrades.TxHash = tx.Hash()
-			// each block has only one tx of this type
-			return finalizedTrades, nil
-		}
-	}
-	return lendingstate.FinalizedResult{}, nil
 }

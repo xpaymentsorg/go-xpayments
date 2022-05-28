@@ -25,12 +25,23 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
-	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
 var (
+	VersionCheckUrlFlag = cli.StringFlag{
+		Name:  "check.url",
+		Usage: "URL to use when checking vulnerabilities",
+		Value: "https://gpay.xpayments.org/docs/vulnerabilities/vulnerabilities.json",
+	}
+	VersionCheckVersionFlag = cli.StringFlag{
+		Name:  "check.version",
+		Usage: "Version to check",
+		Value: fmt.Sprintf("Gpay/v%v/%v-%v/%v",
+			params.VersionWithCommit(gitCommit, gitDate),
+			runtime.GOOS, runtime.GOARCH, runtime.Version()),
+	}
 	makecacheCommand = cli.Command{
 		Action:    utils.MigrateFlags(makecache),
 		Name:      "makecache",
@@ -65,6 +76,21 @@ Regular users do not need to execute it.
 		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The output of this command is supposed to be machine-readable.
+`,
+	}
+	versionCheckCommand = cli.Command{
+		Action: utils.MigrateFlags(versionCheck),
+		Flags: []cli.Flag{
+			VersionCheckUrlFlag,
+			VersionCheckVersionFlag,
+		},
+		Name:      "version-check",
+		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
+		ArgsUsage: "<versionstring (optional)>",
+		Category:  "MISCELLANEOUS COMMANDS",
+		Description: `
+The version-check command fetches vulnerability-information from https://gpay.xpayments.org/docs/vulnerabilities/vulnerabilities.json, 
+and displays information about any security vulnerabilities that affect the currently executing version.
 `,
 	}
 	licenseCommand = cli.Command{
@@ -108,13 +134,14 @@ func makedag(ctx *cli.Context) error {
 
 func version(ctx *cli.Context) error {
 	fmt.Println(strings.Title(clientIdentifier))
-	fmt.Println("Version:", params.Version)
+	fmt.Println("Version:", params.VersionWithMeta)
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
+	if gitDate != "" {
+		fmt.Println("Git Commit Date:", gitDate)
+	}
 	fmt.Println("Architecture:", runtime.GOARCH)
-	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
-	fmt.Println("Network Id:", eth.DefaultConfig.NetworkId)
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
@@ -123,7 +150,7 @@ func version(ctx *cli.Context) error {
 }
 
 func license(_ *cli.Context) error {
-	fmt.Println(`gpay is free software: you can redistribute it and/or modify
+	fmt.Println(`Gpay is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.

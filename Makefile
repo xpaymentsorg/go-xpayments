@@ -1,102 +1,50 @@
-.PHONY: XDC XDC-cross evm all test clean
-.PHONY: XDC-linux XDC-linux-386 XDC-linux-amd64 XDC-linux-mips64 XDC-linux-mips64le
-.PHONY: XDC-darwin XDC-darwin-386 XDC-darwin-amd64
+# This Makefile is meant to be used by people that do not usually work
+# with Go source code. If you know what GOPATH is then you probably
+# don't need to bother with make.
 
-GOBIN = $(shell pwd)/build/bin
-GOFMT = gofmt
-GO ?= 1.13.1
-GO_PACKAGES = .
-GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.go)
+.PHONY: geth android ios evm all test clean
 
-GIT = git
+GOBIN = ./build/bin
+GO ?= latest
+GORUN = env GO111MODULE=on go run
 
-XDC:
-	go run build/ci.go install ./cmd/XDC
+geth:
+	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/XDC\" to launch XDC."
-
-gc:
-	go run build/ci.go install ./cmd/gc
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/gc\" to launch gc."
-
-bootnode:
-	go run build/ci.go install ./cmd/bootnode
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/bootnode\" to launch a bootnode."
-
-puppeth:
-	go run build/ci.go install ./cmd/puppeth
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/puppeth\" to launch puppeth."
+	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
 all:
-	go run build/ci.go install
+	$(GORUN) build/ci.go install
+
+android:
+	$(GORUN) build/ci.go aar --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/geth.aar\" to use the library."
+	@echo "Import \"$(GOBIN)/geth-sources.jar\" to add javadocs"
+	@echo "For more info see https://stackoverflow.com/questions/20994336/android-studio-how-to-attach-javadoc"
+
+ios:
+	$(GORUN) build/ci.go xcode --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test: all
-	go run build/ci.go test
+	$(GORUN) build/ci.go test
+
+lint: ## Run linters.
+	$(GORUN) build/ci.go lint
 
 clean:
+	env GO111MODULE=on go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
-# Cross Compilation Targets (xgo)
+# The devtools target installs tools required for 'go generate'.
+# You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
-XDC-cross: XDC-windows-amd64 XDC-darwin-amd64 XDC-linux
-	@echo "Full cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-*
-
-XDC-linux: XDC-linux-386 XDC-linux-amd64 XDC-linux-mips64 XDC-linux-mips64le
-	@echo "Linux cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-*
-
-XDC-linux-386:
-	go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/XDC
-	@echo "Linux 386 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep 386
-
-XDC-linux-amd64:
-	go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/XDC
-	@echo "Linux amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep amd64
-
-XDC-linux-mips:
-	go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/XDC
-	@echo "Linux MIPS cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mips
-
-XDC-linux-mipsle:
-	go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/XDC
-	@echo "Linux MIPSle cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mipsle
-
-XDC-linux-mips64:
-	go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/XDC
-	@echo "Linux MIPS64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mips64
-
-XDC-linux-mips64le:
-	go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/XDC
-	@echo "Linux MIPS64le cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mips64le
-
-XDC-darwin: XDC-darwin-386 XDC-darwin-amd64
-	@echo "Darwin cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-darwin-*
-
-XDC-darwin-386:
-	go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/XDC
-	@echo "Darwin 386 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-darwin-* | grep 386
-
-XDC-darwin-amd64:
-	go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/XDC
-	@echo "Darwin amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-darwin-* | grep amd64
-
-XDC-windows-amd64:
-	go run build/ci.go xgo -- --go=$(GO) -buildmode=mode -x --targets=windows/amd64 -v ./cmd/XDC
-	@echo "Windows amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-windows-* | grep amd64
-gofmt:
-	$(GOFMT) -s -w $(GO_FILES)
-	$(GIT) checkout vendor
+devtools:
+	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
+	env GOBIN= go install github.com/fjl/gencodec@latest
+	env GOBIN= go install github.com/golang/protobuf/protoc-gen-go@latest
+	env GOBIN= go install ./cmd/abigen
+	@type "solc" 2> /dev/null || echo 'Please install solc'
+	@type "protoc" 2> /dev/null || echo 'Please install protoc'
