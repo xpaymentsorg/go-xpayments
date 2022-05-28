@@ -47,10 +47,10 @@ var (
 		XPoS: &XPoSConfig{
 			Period:              2,
 			Epoch:               900,
-			Reward:              250,
+			Reward:              100,
 			RewardCheckpoint:    900,
 			Gap:                 5,
-			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
+			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000100"),
 		},
 	}
 
@@ -117,11 +117,11 @@ var (
 	AllXPoSProtocolChanges   = &ChainConfig{big.NewInt(89), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 0, Epoch: 30000}}
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 
-	TestXPoSChanConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 2, Epoch: 900, Reward: 250, RewardCheckpoint: 900, Gap: 890, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068")}}
+	TestXPoSChanConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 2, Epoch: 900, Reward: 100, RewardCheckpoint: 900, Gap: 5, FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000100")}}
 	// XPoS config in use for v1 engine only
-	TestXPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true}}
+	TestXPoSMockChainConfig = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{Epoch: 900, Gap: 5, SkipValidation: true}}
 	// XPoS config with v2 engine after block 10
-	TestXPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{Epoch: 900, Gap: 450, SkipValidation: true, V2ConsensusBlockNumber: big.NewInt(10)}}
+	TestXPoSMockChainConfigWithV2Engine = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{Epoch: 900, Gap: 5, SkipValidation: true, V2ConsensusBlockNumber: big.NewInt(10)}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
