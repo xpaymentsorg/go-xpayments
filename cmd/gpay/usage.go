@@ -71,19 +71,19 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.DeveloperGasLimitFlag,
 		},
 	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashCachesLockMmapFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
-			utils.EthashDatasetsLockMmapFlag,
-		},
-	},
+	// {
+	// 	Name: "ETHASH",
+	// 	Flags: []cli.Flag{
+	// 		utils.EthashCacheDirFlag,
+	// 		utils.EthashCachesInMemoryFlag,
+	// 		utils.EthashCachesOnDiskFlag,
+	// 		utils.EthashCachesLockMmapFlag,
+	// 		utils.EthashDatasetDirFlag,
+	// 		utils.EthashDatasetsInMemoryFlag,
+	// 		utils.EthashDatasetsOnDiskFlag,
+	// 		utils.EthashDatasetsLockMmapFlag,
+	// 	},
+	// },
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
@@ -215,13 +215,13 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name:  "METRICS AND STATS",
 		Flags: metricsFlags,
 	},
-	{
-		Name: "ALIASED (deprecated)",
-		Flags: []cli.Flag{
-			utils.NoUSBFlag,
-			utils.LegacyWhitelistFlag,
-		},
-	},
+	// {
+	// 	Name: "ALIASED (deprecated)",
+	// 	Flags: []cli.Flag{
+	// 		utils.NoUSBFlag,
+	// 		utils.LegacyWhitelistFlag,
+	// 	},
+	// },
 	{
 		Name: "MISC",
 		Flags: []cli.Flag{
