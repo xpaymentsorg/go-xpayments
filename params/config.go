@@ -27,7 +27,7 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
+	MainnetGenesisHash = common.HexToHash("0xb75c6249bcb04b1c19a5d141ff9bdb0fe4f6130e0c29890147bacda35bb775fd")
 	RopstenGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
@@ -55,44 +55,88 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 }
 
 var (
+	// // MainnetChainConfig is the chain parameters to run a node on the main network.
+	// MainnetChainConfig = &ChainConfig{
+	// 	ChainID:             big.NewInt(1),
+	// 	HomesteadBlock:      big.NewInt(1_150_000),
+	// 	DAOForkBlock:        big.NewInt(1_920_000),
+	// 	DAOForkSupport:      true,
+	// 	EIP150Block:         big.NewInt(2_463_000),
+	// 	EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+	// 	EIP155Block:         big.NewInt(2_675_000),
+	// 	EIP158Block:         big.NewInt(2_675_000),
+	// 	ByzantiumBlock:      big.NewInt(4_370_000),
+	// 	ConstantinopleBlock: big.NewInt(7_280_000),
+	// 	PetersburgBlock:     big.NewInt(7_280_000),
+	// 	IstanbulBlock:       big.NewInt(9_069_000),
+	// 	MuirGlacierBlock:    big.NewInt(9_200_000),
+	// 	BerlinBlock:         big.NewInt(12_244_000),
+	// 	LondonBlock:         big.NewInt(12_965_000),
+	// 	ArrowGlacierBlock:   big.NewInt(13_773_000),
+	// 	Ethash:              new(EthashConfig),
+	// }
+
+	// // MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
+	// MainnetTrustedCheckpoint = &TrustedCheckpoint{
+	// 	SectionIndex: 451,
+	// 	SectionHead:  common.HexToHash("0xe47f84b9967eb2ad2afff74d59901b63134660011822fdababaf8fdd18a75aa6"),
+	// 	CHTRoot:      common.HexToHash("0xc31e0462ca3d39a46111bb6b63ac4e1cac84089472b7474a319d582f72b3f0c0"),
+	// 	BloomRoot:    common.HexToHash("0x7c9f25ce3577a3ab330d52a7343f801899cf9d4980c69f81de31ccc1a055c809"),
+	// }
+
+	// // MainnetCheckpointOracle contains a set of configs for the main network oracle.
+	// MainnetCheckpointOracle = &CheckpointOracleConfig{
+	// 	Address: common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"),
+	// 	Signers: []common.Address{
+	// 		common.HexToAddress("0x1b2C260efc720BE89101890E4Db589b44E950527"), // Peter
+	// 		common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
+	// 		common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
+	// 		common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
+	// 		common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
+	// 	},
+	// 	Threshold: 2,
+	// }
+
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(1_150_000),
-		DAOForkBlock:        big.NewInt(1_920_000),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2_463_000),
-		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:         big.NewInt(2_675_000),
-		EIP158Block:         big.NewInt(2_675_000),
-		ByzantiumBlock:      big.NewInt(4_370_000),
-		ConstantinopleBlock: big.NewInt(7_280_000),
-		PetersburgBlock:     big.NewInt(7_280_000),
-		IstanbulBlock:       big.NewInt(9_069_000),
-		MuirGlacierBlock:    big.NewInt(9_200_000),
-		BerlinBlock:         big.NewInt(12_244_000),
-		LondonBlock:         big.NewInt(12_965_000),
-		ArrowGlacierBlock:   big.NewInt(13_773_000),
-		Ethash:              new(EthashConfig),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(1_561_651),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(4_460_644),
+		LondonBlock:         big.NewInt(5_062_605),
+		ArrowGlacierBlock:   nil,
+		Clique: &CliqueConfig{
+			Period: 2,
+			Epoch:  30000,
+		},
 	}
 
-	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
+	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 451,
-		SectionHead:  common.HexToHash("0xe47f84b9967eb2ad2afff74d59901b63134660011822fdababaf8fdd18a75aa6"),
-		CHTRoot:      common.HexToHash("0xc31e0462ca3d39a46111bb6b63ac4e1cac84089472b7474a319d582f72b3f0c0"),
-		BloomRoot:    common.HexToHash("0x7c9f25ce3577a3ab330d52a7343f801899cf9d4980c69f81de31ccc1a055c809"),
+		SectionIndex: 210,
+		SectionHead:  common.HexToHash("0xbb11eaf551a6c06f74a6c7bbfe1699cbf64b8f248b64691da916dd443176db2f"),
+		CHTRoot:      common.HexToHash("0x9934ae326d00d9c7de2e074c0e51689efb7fa7fcba18929ff4279c27259c45e6"),
+		BloomRoot:    common.HexToHash("0x7fe3bd4fd45194aa8a5cfe5ac590edff1f870d3d98d3c310494e7f67613a87ff"),
 	}
 
-	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
+	// MainnetCheckpointOracle contains a set of configs for the Goerli test network oracle.
 	MainnetCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"),
+		Address: common.HexToAddress("0xA779572D436FE32bbfdA9e057806a3f4Ae2D9f58"),
 		Signers: []common.Address{
-			common.HexToAddress("0x1b2C260efc720BE89101890E4Db589b44E950527"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
+			common.HexToAddress("0x6C668FA29735D7b78f295EC38ff2495db0Cc6a16"), // Signer001
+			common.HexToAddress("0x6eEa0e70D8497468F46519EF62ABd1f23576774D"), // Signer002
+			common.HexToAddress("0x3Bf4625bF7330c2776F5D27ca9BC0FfbE233659a"), // Signer003
+			common.HexToAddress("0x030777f39809e19f189B4d904017Dc173B1Ad6E2"), // Signer004
+			common.HexToAddress("0x85e625cEc0F5302F7163F873fF5FaA4A86aa00A6"), // Signer005
 		},
 		Threshold: 2,
 	}

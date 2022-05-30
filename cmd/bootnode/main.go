@@ -35,7 +35,7 @@ import (
 
 func main() {
 	var (
-		listenAddr  = flag.String("addr", ":30301", "listen address")
+		listenAddr  = flag.String("addr", ":30340", "listen address")
 		genKey      = flag.String("genkey", "", "generate a node key")
 		writeAddr   = flag.Bool("writeaddress", false, "write out the node's public key and quit")
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
@@ -111,7 +111,7 @@ func main() {
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
 	if natm != nil {
 		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "xpayments discovery")
 		}
 		if ext, err := natm.ExternalIP(); err == nil {
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
