@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
@@ -123,26 +124,11 @@ func remoteConsole(ctx *cli.Context) error {
 		if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 			path = ctx.GlobalString(utils.DataDirFlag.Name)
 		}
-		// if path != "" {
-		// 	if ctx.GlobalBool(utils.RopstenFlag.Name) {
-		// 		// Maintain compatibility with older Gpay configurations storing the
-		// 		// Ropsten database in `testnet` instead of `ropsten`.
-		// 		legacyPath := filepath.Join(path, "testnet")
-		// 		if common.FileExist(legacyPath) {
-		// 			path = legacyPath
-		// 		} else {
-		// 			path = filepath.Join(path, "ropsten")
-		// 		}
-		// 	} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
-		// 		path = filepath.Join(path, "rinkeby")
-		// 	} else if ctx.GlobalBool(utils.GoerliFlag.Name) {
-		// 		path = filepath.Join(path, "goerli")
-		// 	} else if ctx.GlobalBool(utils.SepoliaFlag.Name) {
-		// 		path = filepath.Join(path, "sepolia")
-		// 	} else if ctx.GlobalBool(utils.KilnFlag.Name) {
-		// 		path = filepath.Join(path, "kiln")
-		// 	}
-		// }
+		if path != "" {
+			if ctx.GlobalBool(utils.BerylliumFlag.Name) {
+				path = filepath.Join(path, "beryllium")
+			}
+		}
 		endpoint = fmt.Sprintf("%s/gpay.ipc", path)
 	}
 	client, err := dialRPC(endpoint)
