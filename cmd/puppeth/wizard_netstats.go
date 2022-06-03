@@ -36,7 +36,7 @@ func (w *wizard) networkStats() {
 		return
 	}
 	// Clear out some previous configs to refill from current scan
-	w.conf.ethstats = ""
+	w.conf.netstats = ""
 	w.conf.bootnodes = w.conf.bootnodes[:0]
 
 	// Iterate over all the specified hosts and check their status
@@ -74,7 +74,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	// Gather some global stats to feed into the wizard
 	var (
 		genesis   string
-		ethstats  string
+		netstats  string
 		bootnodes []string
 	)
 	// Ensure a valid SSH connection to the remote server
@@ -82,6 +82,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	logger.Info("Starting remote server health-check")
 
 	stat := &serverStat{
+		address:  client.address,
 		services: make(map[string]map[string]string),
 	}
 	if client == nil {
@@ -93,8 +94,6 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		}
 		client = conn
 	}
-	stat.address = client.address
-
 	// Client connected one way or another, run health-checks
 	logger.Debug("Checking for nginx availability")
 	if infos, err := checkNginx(client, w.network); err != nil {
@@ -104,14 +103,14 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	} else {
 		stat.services["nginx"] = infos.Report()
 	}
-	logger.Debug("Checking for ethstats availability")
-	if infos, err := checkEthstats(client, w.network); err != nil {
+	logger.Debug("Checking for netstats availability")
+	if infos, err := checkNetstats(client, w.network); err != nil {
 		if err != ErrServiceUnknown {
-			stat.services["ethstats"] = map[string]string{"offline": err.Error()}
+			stat.services["netstats"] = map[string]string{"offline": err.Error()}
 		}
 	} else {
-		stat.services["ethstats"] = infos.Report()
-		ethstats = infos.config
+		stat.services["netstats"] = infos.Report()
+		netstats = infos.config
 	}
 	logger.Debug("Checking for bootnode availability")
 	if infos, err := checkNode(client, w.network, true); err != nil {
@@ -133,13 +132,14 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		stat.services["sealnode"] = infos.Report()
 		genesis = string(infos.genesis)
 	}
-	logger.Debug("Checking for explorer availability")
-	if infos, err := checkExplorer(client, w.network); err != nil {
+
+	logger.Debug("Checking for wallet availability")
+	if infos, err := checkWallet(client, w.network); err != nil {
 		if err != ErrServiceUnknown {
-			stat.services["explorer"] = map[string]string{"offline": err.Error()}
+			stat.services["wallet"] = map[string]string{"offline": err.Error()}
 		}
 	} else {
-		stat.services["explorer"] = infos.Report()
+		stat.services["wallet"] = infos.Report()
 	}
 	logger.Debug("Checking for faucet availability")
 	if infos, err := checkFaucet(client, w.network); err != nil {
@@ -149,14 +149,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	} else {
 		stat.services["faucet"] = infos.Report()
 	}
-	logger.Debug("Checking for dashboard availability")
-	if infos, err := checkDashboard(client, w.network); err != nil {
-		if err != ErrServiceUnknown {
-			stat.services["dashboard"] = map[string]string{"offline": err.Error()}
-		}
-	} else {
-		stat.services["dashboard"] = infos.Report()
-	}
+
 	// Feed and newly discovered information into the wizard
 	w.lock.Lock()
 	defer w.lock.Unlock()
@@ -169,8 +162,8 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 			w.conf.Genesis = g
 		}
 	}
-	if ethstats != "" {
-		w.conf.ethstats = ethstats
+	if netstats != "" {
+		w.conf.netstats = netstats
 	}
 	w.conf.bootnodes = append(w.conf.bootnodes, bootnodes...)
 
@@ -196,7 +189,7 @@ func (stats serverStats) render() {
 
 	table.SetHeader([]string{"Server", "Address", "Service", "Config", "Value"})
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetColWidth(40)
+	table.SetColWidth(100)
 
 	// Find the longest lines for all columns for the hacked separator
 	separator := make([]string, 5)
@@ -207,9 +200,6 @@ func (stats serverStats) render() {
 		if len(stat.address) > len(separator[1]) {
 			separator[1] = strings.Repeat("-", len(stat.address))
 		}
-		if len(stat.failure) > len(separator[1]) {
-			separator[1] = strings.Repeat("-", len(stat.failure))
-		}
 		for service, configs := range stat.services {
 			if len(service) > len(separator[2]) {
 				separator[2] = strings.Repeat("-", len(service))
@@ -218,10 +208,8 @@ func (stats serverStats) render() {
 				if len(config) > len(separator[3]) {
 					separator[3] = strings.Repeat("-", len(config))
 				}
-				for _, val := range strings.Split(value, "\n") {
-					if len(val) > len(separator[4]) {
-						separator[4] = strings.Repeat("-", len(val))
-					}
+				if len(value) > len(separator[4]) {
+					separator[4] = strings.Repeat("-", len(value))
 				}
 			}
 		}
@@ -246,11 +234,7 @@ func (stats serverStats) render() {
 		sort.Strings(services)
 
 		if len(services) == 0 {
-			if stats[server].failure != "" {
-				table.Append([]string{server, stats[server].failure, "", "", ""})
-			} else {
-				table.Append([]string{server, stats[server].address, "", "", ""})
-			}
+			table.Append([]string{server, stats[server].address, "", "", ""})
 		}
 		for j, service := range services {
 			// Add an empty line between all services
@@ -265,17 +249,13 @@ func (stats serverStats) render() {
 			sort.Strings(configs)
 
 			for k, config := range configs {
-				for l, value := range strings.Split(stats[server].services[service][config], "\n") {
-					switch {
-					case j == 0 && k == 0 && l == 0:
-						table.Append([]string{server, stats[server].address, service, config, value})
-					case k == 0 && l == 0:
-						table.Append([]string{"", "", service, config, value})
-					case l == 0:
-						table.Append([]string{"", "", "", config, value})
-					default:
-						table.Append([]string{"", "", "", "", value})
-					}
+				switch {
+				case j == 0 && k == 0:
+					table.Append([]string{server, stats[server].address, service, config, stats[server].services[service][config]})
+				case k == 0:
+					table.Append([]string{"", "", service, config, stats[server].services[service][config]})
+				default:
+					table.Append([]string{"", "", "", config, stats[server].services[service][config]})
 				}
 			}
 		}

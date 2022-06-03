@@ -48,13 +48,13 @@ func newPeerError(code int, format string, v ...interface{}) *peerError {
 	return err
 }
 
-func (pe *peerError) Error() string {
-	return pe.message
+func (self *peerError) Error() string {
+	return self.message
 }
 
 var errProtocolReturned = errors.New("protocol returned")
 
-type DiscReason uint8
+type DiscReason uint
 
 const (
 	DiscRequested DiscReason = iota
@@ -69,7 +69,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
-	DiscSubprotocolError = DiscReason(0x10)
+	DiscSubprotocolError = 0x10
 )
 
 var discReasonToString = [...]string{
@@ -89,7 +89,7 @@ var discReasonToString = [...]string{
 }
 
 func (d DiscReason) String() string {
-	if len(discReasonToString) <= int(d) {
+	if len(discReasonToString) < int(d) {
 		return fmt.Sprintf("unknown disconnect reason %d", d)
 	}
 	return discReasonToString[d]

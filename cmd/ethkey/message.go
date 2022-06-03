@@ -19,13 +19,13 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"os"
+	"io/ioutil"
 
+	"github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"gopkg.in/urfave/cli.v1"
 )
 
 type outputSign struct {
@@ -56,7 +56,7 @@ To sign a message contained in a file, use the --msgfile flag.
 
 		// Load the keyfile.
 		keyfilepath := ctx.Args().First()
-		keyjson, err := os.ReadFile(keyfilepath)
+		keyjson, err := ioutil.ReadFile(keyfilepath)
 		if err != nil {
 			utils.Fatalf("Failed to read the keyfile at '%s': %v", keyfilepath, err)
 		}
@@ -142,11 +142,11 @@ It is possible to refer to a file containing the message.`,
 }
 
 func getMessage(ctx *cli.Context, msgarg int) []byte {
-	if file := ctx.String(msgfileFlag.Name); file != "" {
+	if file := ctx.String("msgfile"); file != "" {
 		if len(ctx.Args()) > msgarg {
 			utils.Fatalf("Can't use --msgfile and message argument at the same time.")
 		}
-		msg, err := os.ReadFile(file)
+		msg, err := ioutil.ReadFile(file)
 		if err != nil {
 			utils.Fatalf("Can't read message file: %v", err)
 		}

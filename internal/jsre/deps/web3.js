@@ -3696,7 +3696,7 @@ var outputBigNumberFormatter = function (number) {
 };
 
 var isPredefinedBlockNumber = function (blockNumber) {
-    return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest' || blockNumber === 'finalized';
+    return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest';
 };
 
 var inputDefaultBlockNumberFormatter = function (blockNumber) {
@@ -3734,7 +3734,7 @@ var inputCallFormatter = function (options){
         options.to = inputAddressFormatter(options.to);
     }
 
-    ['maxFeePerGas', 'maxPriorityFeePerGas', 'gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
+    ['gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
         return options[key] !== undefined;
     }).forEach(function(key){
         options[key] = utils.fromDecimal(options[key]);
@@ -3759,7 +3759,7 @@ var inputTransactionFormatter = function (options){
         options.to = inputAddressFormatter(options.to);
     }
 
-    ['maxFeePerGas', 'maxPriorityFeePerGas', 'gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
+    ['gasPrice', 'gas', 'value', 'nonce'].filter(function (key) {
         return options[key] !== undefined;
     }).forEach(function(key){
         options[key] = utils.fromDecimal(options[key]);
@@ -3783,12 +3783,6 @@ var outputTransactionFormatter = function (tx){
     tx.nonce = utils.toDecimal(tx.nonce);
     tx.gas = utils.toDecimal(tx.gas);
     tx.gasPrice = utils.toBigNumber(tx.gasPrice);
-    if(tx.maxFeePerGas !== undefined) {
-      tx.maxFeePerGas = utils.toBigNumber(tx.maxFeePerGas);
-    }
-    if(tx.maxPriorityFeePerGas !== undefined) {
-      tx.maxPriorityFeePerGas = utils.toBigNumber(tx.maxPriorityFeePerGas);
-    }
     tx.value = utils.toBigNumber(tx.value);
     return tx;
 };
@@ -3807,9 +3801,7 @@ var outputTransactionReceiptFormatter = function (receipt){
         receipt.transactionIndex = utils.toDecimal(receipt.transactionIndex);
     receipt.cumulativeGasUsed = utils.toDecimal(receipt.cumulativeGasUsed);
     receipt.gasUsed = utils.toDecimal(receipt.gasUsed);
-    if(receipt.effectiveGasPrice !== undefined) {
-      receipt.effectiveGasPrice = utils.toBigNumber(receipt.effectiveGasPrice);
-    }
+
     if(utils.isArray(receipt.logs)) {
         receipt.logs = receipt.logs.map(function(log){
             return outputLogFormatter(log);
@@ -3827,10 +3819,8 @@ var outputTransactionReceiptFormatter = function (receipt){
  * @returns {Object}
 */
 var outputBlockFormatter = function(block) {
+
     // transform to number
-    if (block.baseFeePerGas !== undefined) {
-      block.baseFeePerGas = utils.toBigNumber(block.baseFeePerGas);
-    }
     block.gasLimit = utils.toDecimal(block.gasLimit);
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);
@@ -3849,6 +3839,21 @@ var outputBlockFormatter = function(block) {
     }
 
     return block;
+};
+
+/**
+ * Formats the output of a genesisAlloc to its proper values
+ *
+ * @method genesisAllocFormatter
+ * @param {Object} genesisAlloc
+ * @returns {Object}
+ */
+var genesisAllocFormatter = function(genesisAlloc) {
+  Object.keys(genesisAlloc).forEach(function(key) {
+    // transform to number
+    genesisAlloc[key].balance = utils.toDecimal(genesisAlloc[key].balance)
+  });
+  return genesisAlloc
 };
 
 /**
@@ -3949,18 +3954,10 @@ var outputSyncingFormatter = function(result) {
     result.startingBlock = utils.toDecimal(result.startingBlock);
     result.currentBlock = utils.toDecimal(result.currentBlock);
     result.highestBlock = utils.toDecimal(result.highestBlock);
-    result.syncedAccounts = utils.toDecimal(result.syncedAccounts);
-    result.syncedAccountBytes = utils.toDecimal(result.syncedAccountBytes);
-    result.syncedBytecodes = utils.toDecimal(result.syncedBytecodes);
-    result.syncedBytecodeBytes = utils.toDecimal(result.syncedBytecodeBytes);
-    result.syncedStorage = utils.toDecimal(result.syncedStorage);
-    result.syncedStorageBytes = utils.toDecimal(result.syncedStorageBytes);
-    result.healedTrienodes = utils.toDecimal(result.healedTrienodes);
-    result.healedTrienodeBytes = utils.toDecimal(result.healedTrienodeBytes);
-    result.healedBytecodes = utils.toDecimal(result.healedBytecodes);
-    result.healedBytecodeBytes = utils.toDecimal(result.healedBytecodeBytes);
-    result.healingTrienodes = utils.toDecimal(result.healingTrienodes);
-    result.healingBytecode = utils.toDecimal(result.healingBytecode);
+    if (result.knownStates) {
+        result.knownStates = utils.toDecimal(result.knownStates);
+        result.pulledStates = utils.toDecimal(result.pulledStates);
+    }
 
     return result;
 };
@@ -3976,6 +3973,7 @@ module.exports = {
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
+    genesisAllocFormatter: genesisAllocFormatter,
     outputLogFormatter: outputLogFormatter,
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter
@@ -5293,6 +5291,21 @@ var methods = function () {
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
+    var totalSupply = new Method({
+        name: 'totalSupply',
+        call: 'eth_totalSupply',
+        params: 1,
+        inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
+        outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var genesisAlloc = new Method({
+        name: 'genesisAlloc',
+        call: 'eth_genesisAlloc',
+        params: 0,
+        outputFormatter: formatters.genesisAllocFormatter
+    });
+
     var getStorageAt = new Method({
         name: 'getStorageAt',
         call: 'eth_getStorageAt',
@@ -5451,6 +5464,8 @@ var methods = function () {
 
     return [
         getBalance,
+        totalSupply,
+        genesisAlloc,
         getStorageAt,
         getCode,
         getBlock,
@@ -13643,4 +13658,4 @@ if (typeof window !== 'undefined' && typeof window.Web3 === 'undefined') {
 module.exports = Web3;
 
 },{"./lib/web3":22}]},{},["web3"])
-
+//# sourceMappingURL=web3-light.js.map

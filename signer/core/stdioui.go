@@ -38,7 +38,7 @@ func NewStdIOUI() *StdIOUI {
 }
 
 func (ui *StdIOUI) RegisterUIServer(api *UIServerAPI) {
-	ui.client.RegisterName("clef", api)
+	//TODO not yet supported ui.client.RegisterName("clef", api)
 }
 
 // dispatch sends a request over the stdio

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/xpaymentsorg/go-xpayments/internal/flags"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli"
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 )
 
 const (
@@ -30,20 +30,17 @@ const (
 
 // Git SHA1 commit hash of the release (set via linker flags)
 var gitCommit = ""
-var gitDate = ""
 
 var app *cli.App
 
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "an Ethereum key manager")
+	app = utils.NewApp(gitCommit, "an Ethereum key manager")
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,
-		commandChangePassphrase,
 		commandSignMessage,
 		commandVerifyMessage,
 	}
-	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }
 
 // Commonly used command line flags.
@@ -55,6 +52,10 @@ var (
 	jsonFlag = cli.BoolFlag{
 		Name:  "json",
 		Usage: "output JSON instead of human-readable format",
+	}
+	messageFlag = cli.StringFlag{
+		Name:  "message",
+		Usage: "the file that contains the message to sign/verify",
 	}
 )
 

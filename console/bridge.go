@@ -144,14 +144,15 @@ func (b *bridge) OpenWallet(call jsre.Call) (goja.Value, error) {
 		if val, err = openWallet(goja.Null(), wallet, passwd); err != nil {
 			if !strings.HasSuffix(err.Error(), scwallet.ErrPINNeeded.Error()) {
 				return nil, err
-			}
-			// PIN input requested, fetch from the user and call open again
-			input, err := b.prompter.PromptPassword("Please enter current PIN: ")
-			if err != nil {
-				return nil, err
-			}
-			if val, err = openWallet(goja.Null(), wallet, call.VM.ToValue(input)); err != nil {
-				return nil, err
+			} else {
+				// PIN input requested, fetch from the user and call open again
+				input, err := b.prompter.PromptPassword("Please enter current PIN: ")
+				if err != nil {
+					return nil, err
+				}
+				if val, err = openWallet(goja.Null(), wallet, call.VM.ToValue(input)); err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -352,14 +353,14 @@ func (b *bridge) SleepBlocks(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Poll the current block number until either it or a timeout is reached.
-	deadline := time.Now().Add(time.Duration(sleep) * time.Second)
-	var lastNumber hexutil.Uint64
-	if err := b.client.Call(&lastNumber, "eth_blockNumber"); err != nil {
-		return nil, err
-	}
+	var (
+		deadline   = time.Now().Add(time.Duration(sleep) * time.Second)
+		lastNumber = ^hexutil.Uint64(0)
+	)
 	for time.Now().Before(deadline) {
 		var number hexutil.Uint64
-		if err := b.client.Call(&number, "eth_blockNumber"); err != nil {
+		err := b.client.Call(&number, "eth_blockNumber")
+		if err != nil {
 			return nil, err
 		}
 		if number != lastNumber {
@@ -412,7 +413,9 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 		resp.Set("id", req.ID)
 
 		var result json.RawMessage
-		if err = b.client.Call(&result, req.Method, req.Params...); err == nil {
+		err = b.client.Call(&result, req.Method, req.Params...)
+		switch err := err.(type) {
+		case nil:
 			if result == nil {
 				// Special case null because it is decoded as an empty
 				// raw message for some reason.
@@ -430,16 +433,10 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 					resp.Set("result", resultVal)
 				}
 			}
-		} else {
-			code := -32603
-			var data interface{}
-			if err, ok := err.(rpc.Error); ok {
-				code = err.ErrorCode()
-			}
-			if err, ok := err.(rpc.DataError); ok {
-				data = err.ErrorData()
-			}
-			setError(resp, code, err.Error(), data)
+		case rpc.Error:
+			setError(resp, err.ErrorCode(), err.Error(), nil)
+		default:
+			setError(resp, -32603, err.Error(), nil)
 		}
 		resps = append(resps, resp)
 	}

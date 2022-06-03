@@ -14,32 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package light implements on-demand retrieval capable state and chain objects
+// for the Ethereum Light Client.
 package les
 
 import (
 	"container/list"
+	"errors"
 	"sync"
 	"time"
-
-	"github.com/xpaymentsorg/go-xpayments/common/mclock"
-	"github.com/xpaymentsorg/go-xpayments/les/utils"
 )
+
+// ErrNoPeers is returned if no peers capable of serving a queued request are available
+var ErrNoPeers = errors.New("no suitable peers available")
 
 // requestDistributor implements a mechanism that distributes requests to
 // suitable peers, obeying flow control rules and prioritizing them in creation
 // order (even when a resend is necessary).
 type requestDistributor struct {
-	clock        mclock.Clock
-	reqQueue     *list.List
-	lastReqOrder uint64
-	peers        map[distPeer]struct{}
-	peerLock     sync.RWMutex
-	loopChn      chan struct{}
-	loopNextSent bool
-	lock         sync.Mutex
-
-	closeCh chan struct{}
-	wg      sync.WaitGroup
+	reqQueue         *list.List
+	lastReqOrder     uint64
+	peers            map[distPeer]struct{}
+	peerLock         sync.RWMutex
+	stopChn, loopChn chan struct{}
+	loopNextSent     bool
+	lock             sync.Mutex
 }
 
 // distPeer is an LES server peer interface for the request distributor.
@@ -50,7 +49,7 @@ type requestDistributor struct {
 type distPeer interface {
 	waitBefore(uint64) (time.Duration, float64)
 	canQueue() bool
-	queueSend(f func()) bool
+	queueSend(f func())
 }
 
 // distReq is the request abstraction used by the distributor. It is based on
@@ -66,39 +65,35 @@ type distReq struct {
 	canSend func(distPeer) bool
 	request func(distPeer) func()
 
-	reqOrder     uint64
-	sentChn      chan distPeer
-	element      *list.Element
-	waitForPeers mclock.AbsTime
-	enterQueue   mclock.AbsTime
+	reqOrder uint64
+	sentChn  chan distPeer
+	element  *list.Element
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDistributor {
+func newRequestDistributor(peers *peerSet, stopChn chan struct{}) *requestDistributor {
 	d := &requestDistributor{
-		clock:    clock,
 		reqQueue: list.New(),
 		loopChn:  make(chan struct{}, 2),
-		closeCh:  make(chan struct{}),
+		stopChn:  stopChn,
 		peers:    make(map[distPeer]struct{}),
 	}
 	if peers != nil {
-		peers.subscribe(d)
+		peers.notify(d)
 	}
-	d.wg.Add(1)
 	go d.loop()
 	return d
 }
 
 // registerPeer implements peerSetNotify
-func (d *requestDistributor) registerPeer(p *serverPeer) {
+func (d *requestDistributor) registerPeer(p *peer) {
 	d.peerLock.Lock()
 	d.peers[p] = struct{}{}
 	d.peerLock.Unlock()
 }
 
 // unregisterPeer implements peerSetNotify
-func (d *requestDistributor) unregisterPeer(p *serverPeer) {
+func (d *requestDistributor) unregisterPeer(p *peer) {
 	d.peerLock.Lock()
 	delete(d.peers, p)
 	d.peerLock.Unlock()
@@ -111,28 +106,19 @@ func (d *requestDistributor) registerTestPeer(p distPeer) {
 	d.peerLock.Unlock()
 }
 
-var (
-	// distMaxWait is the maximum waiting time after which further necessary waiting
-	// times are recalculated based on new feedback from the servers
-	distMaxWait = time.Millisecond * 50
-
-	// waitForPeers is the time window in which a request does not fail even if it
-	// has no suitable peers to send to at the moment
-	waitForPeers = time.Second * 3
-)
+// distMaxWait is the maximum waiting time after which further necessary waiting
+// times are recalculated based on new feedback from the servers
+const distMaxWait = time.Millisecond * 10
 
 // main event loop
 func (d *requestDistributor) loop() {
-	defer d.wg.Done()
 	for {
 		select {
-		case <-d.closeCh:
+		case <-d.stopChn:
 			d.lock.Lock()
 			elem := d.reqQueue.Front()
 			for elem != nil {
-				req := elem.Value.(*distReq)
-				close(req.sentChn)
-				req.sentChn = nil
+				close(elem.Value.(*distReq).sentChn)
 				elem = elem.Next()
 			}
 			d.lock.Unlock()
@@ -149,7 +135,6 @@ func (d *requestDistributor) loop() {
 					send := req.request(peer)
 					if send != nil {
 						peer.queueSend(send)
-						requestSendDelay.Update(time.Duration(d.clock.Now() - req.enterQueue))
 					}
 					chn <- peer
 					close(chn)
@@ -165,7 +150,7 @@ func (d *requestDistributor) loop() {
 						wait = distMaxWait
 					}
 					go func() {
-						d.clock.Sleep(wait)
+						time.Sleep(wait)
 						d.loopChn <- struct{}{}
 					}()
 					break loop
@@ -180,11 +165,12 @@ func (d *requestDistributor) loop() {
 type selectPeerItem struct {
 	peer   distPeer
 	req    *distReq
-	weight uint64
+	weight int64
 }
 
-func selectPeerWeight(i interface{}) uint64 {
-	return i.(selectPeerItem).weight
+// Weight implements wrsItem interface
+func (sp selectPeerItem) Weight() int64 {
+	return sp.weight
 }
 
 // nextRequest returns the next possible request from any peer, along with the
@@ -193,25 +179,18 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	checkedPeers := make(map[distPeer]struct{})
 	elem := d.reqQueue.Front()
 	var (
+		bestPeer distPeer
+		bestReq  *distReq
 		bestWait time.Duration
-		sel      *utils.WeightedRandomSelect
+		sel      *weightedRandomSelect
 	)
 
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
 
-	peerCount := len(d.peers)
-	for (len(checkedPeers) < peerCount || elem == d.reqQueue.Front()) && elem != nil {
+	for (len(d.peers) > 0 || elem == d.reqQueue.Front()) && elem != nil {
 		req := elem.Value.(*distReq)
 		canSend := false
-		now := d.clock.Now()
-		if req.waitForPeers > now {
-			canSend = true
-			wait := time.Duration(req.waitForPeers - now)
-			if bestWait == 0 || wait < bestWait {
-				bestWait = wait
-			}
-		}
 		for peer := range d.peers {
 			if _, ok := checkedPeers[peer]; !ok && peer.canQueue() && req.canSend(peer) {
 				canSend = true
@@ -219,11 +198,13 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 				wait, bufRemain := peer.waitBefore(cost)
 				if wait == 0 {
 					if sel == nil {
-						sel = utils.NewWeightedRandomSelect(selectPeerWeight)
+						sel = newWeightedRandomSelect()
 					}
-					sel.Update(selectPeerItem{peer: peer, req: req, weight: uint64(bufRemain*1000000) + 1})
+					sel.update(selectPeerItem{peer: peer, req: req, weight: int64(bufRemain*1000000) + 1})
 				} else {
-					if bestWait == 0 || wait < bestWait {
+					if bestReq == nil || wait < bestWait {
+						bestPeer = peer
+						bestReq = req
 						bestWait = wait
 					}
 				}
@@ -239,10 +220,10 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	}
 
 	if sel != nil {
-		c := sel.Choose().(selectPeerItem)
+		c := sel.choose().(selectPeerItem)
 		return c.peer, c.req, 0
 	}
-	return nil, nil, bestWait
+	return bestPeer, bestReq, bestWait
 }
 
 // queue adds a request to the distribution queue, returns a channel where the
@@ -256,11 +237,7 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 	if r.reqOrder == 0 {
 		d.lastReqOrder++
 		r.reqOrder = d.lastReqOrder
-		r.waitForPeers = d.clock.Now() + mclock.AbsTime(waitForPeers)
 	}
-	// Assign the timestamp when the request is queued no matter it's
-	// a new one or re-queued one.
-	r.enterQueue = d.clock.Now()
 
 	back := d.reqQueue.Back()
 	if back == nil || r.reqOrder > back.Value.(*distReq).reqOrder {
@@ -305,9 +282,4 @@ func (d *requestDistributor) remove(r *distReq) {
 		d.reqQueue.Remove(r.element)
 		r.element = nil
 	}
-}
-
-func (d *requestDistributor) close() {
-	close(d.closeCh)
-	d.wg.Wait()
 }

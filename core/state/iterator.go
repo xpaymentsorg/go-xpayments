@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/trie"
 )
@@ -105,7 +104,7 @@ func (it *NodeIterator) step() error {
 		return nil
 	}
 	// Otherwise we've reached an account node, initiate data iteration
-	var account types.StateAccount
+	var account Account
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
 		return err
 	}
@@ -117,10 +116,10 @@ func (it *NodeIterator) step() error {
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
-	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
-		it.codeHash = common.BytesToHash(account.CodeHash)
+	if account.CodeHash != emptyCodeHash {
+		it.codeHash = account.CodeHash
 		addrHash := common.BytesToHash(it.stateIt.LeafKey())
-		it.code, err = it.state.db.ContractCode(addrHash, common.BytesToHash(account.CodeHash))
+		it.code, err = it.state.db.ContractCode(addrHash, account.CodeHash)
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}

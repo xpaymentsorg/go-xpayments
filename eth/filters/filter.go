@@ -25,23 +25,26 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/bloombits"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
 type Backend interface {
-	ChainDb() ethdb.Database
+	ChainDb() common.Database
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
-	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
-	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
-	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
+	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent, name string)
+	UnsubscribeNewTxsEvent(ch chan<- core.NewTxsEvent)
+	SubscribeChainEvent(ch chan<- core.ChainEvent, name string)
+	UnsubscribeChainEvent(ch chan<- core.ChainEvent)
+	SubscribeLogsEvent(ch chan<- []*types.Log, name string)
+	UnsubscribeLogsEvent(ch chan<- []*types.Log)
+	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent, name string)
+	UnsubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
+	SubscribePendingLogsEvent(ch chan<- core.PendingLogsEvent, name string)
+	UnsubscribePendingLogsEvent(ch chan<- core.PendingLogsEvent)
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
@@ -51,7 +54,7 @@ type Backend interface {
 type Filter struct {
 	backend Backend
 
-	db        ethdb.Database
+	db        common.Database
 	addresses []common.Address
 	topics    [][]common.Hash
 
@@ -210,7 +213,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 	}
 }
 
-// unindexedLogs returns the logs matching the filter criteria based on raw block
+// indexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
 func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
 	var logs []*types.Log
@@ -299,7 +302,7 @@ Logs:
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
 		if len(topics) > len(log.Topics) {
-			continue
+			continue Logs
 		}
 		for i, sub := range topics {
 			match := len(sub) == 0 // empty rule set == wildcard

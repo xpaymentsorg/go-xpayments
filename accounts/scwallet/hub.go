@@ -34,7 +34,7 @@ package scwallet
 
 import (
 	"encoding/json"
-	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -77,7 +77,7 @@ type Hub struct {
 
 	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
 	wallets     map[string]*Wallet      // Mapping from reader names to wallet instances
-	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
+	updateFeed  accounts.WalletFeed     // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
 
@@ -96,7 +96,7 @@ func (hub *Hub) readPairings() error {
 		return err
 	}
 
-	pairingData, err := io.ReadAll(pairingFile)
+	pairingData, err := ioutil.ReadAll(pairingFile)
 	if err != nil {
 		return err
 	}
@@ -263,20 +263,27 @@ func (hub *Hub) refreshWallets() {
 
 // Subscribe implements accounts.Backend, creating an async subscription to
 // receive notifications on the addition or removal of smart card wallets.
-func (hub *Hub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
+func (hub *Hub) Subscribe(sink chan<- accounts.WalletEvent, name string) {
 	// We need the mutex to reliably start/stop the update loop
 	hub.stateLock.Lock()
 	defer hub.stateLock.Unlock()
 
-	// Subscribe the caller and track the subscriber count
-	sub := hub.updateScope.Track(hub.updateFeed.Subscribe(sink))
+	// Subscribe the caller
+	hub.updateFeed.Subscribe(sink, name)
 
 	// Subscribers require an active notification loop, start it
 	if !hub.updating {
 		hub.updating = true
 		go hub.updater()
 	}
-	return sub
+}
+
+func (hub *Hub) Unsubscribe(ch chan<- accounts.WalletEvent) {
+	// We need the mutex to reliably start/stop the update loop
+	hub.stateLock.Lock()
+	defer hub.stateLock.Unlock()
+
+	hub.updateFeed.Unsubscribe(ch)
 }
 
 // updater is responsible for maintaining an up-to-date list of wallets managed

@@ -14,13 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rlp_test
+package rlp
 
 import (
 	"fmt"
 	"io"
-
-	"github.com/xpaymentsorg/go-xpayments/rlp"
 )
 
 type MyCoolType struct {
@@ -30,19 +28,27 @@ type MyCoolType struct {
 
 // EncodeRLP writes x as RLP list [a, b] that omits the Name field.
 func (x *MyCoolType) EncodeRLP(w io.Writer) (err error) {
-	return rlp.Encode(w, []uint{x.a, x.b})
+	// Note: the receiver can be a nil pointer. This allows you to
+	// control the encoding of nil, but it also means that you have to
+	// check for a nil receiver.
+	if x == nil {
+		err = Encode(w, []uint{0, 0})
+	} else {
+		err = Encode(w, []uint{x.a, x.b})
+	}
+	return err
 }
 
 func ExampleEncoder() {
 	var t *MyCoolType // t is nil pointer to MyCoolType
-	bytes, _ := rlp.EncodeToBytes(t)
+	bytes, _ := EncodeToBytes(t)
 	fmt.Printf("%v → %X\n", t, bytes)
 
 	t = &MyCoolType{Name: "foobar", a: 5, b: 6}
-	bytes, _ = rlp.EncodeToBytes(t)
+	bytes, _ = EncodeToBytes(t)
 	fmt.Printf("%v → %X\n", t, bytes)
 
 	// Output:
-	// <nil> → C0
+	// <nil> → C28080
 	// &{foobar 5 6} → C20506
 }

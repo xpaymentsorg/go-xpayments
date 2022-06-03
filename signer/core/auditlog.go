@@ -24,7 +24,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
 	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/signer/core/apitypes"
 )
 
 type AuditLogger struct {
@@ -44,7 +43,7 @@ func (l *AuditLogger) New(ctx context.Context) (common.Address, error) {
 	return l.api.New(ctx)
 }
 
-func (l *AuditLogger) SignTransaction(ctx context.Context, args apitypes.SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
+func (l *AuditLogger) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
 	sel := "<nil>"
 	if methodSelector != nil {
 		sel = *methodSelector
@@ -71,25 +70,7 @@ func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr com
 	return b, e
 }
 
-func (l *AuditLogger) SignGnosisSafeTx(ctx context.Context, addr common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
-	sel := "<nil>"
-	if methodSelector != nil {
-		sel = *methodSelector
-	}
-	data, _ := json.Marshal(gnosisTx) // can ignore error, marshalling what we just unmarshalled
-	l.log.Info("SignGnosisSafeTx", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"addr", addr.String(), "data", string(data), "selector", sel)
-	res, e := l.api.SignGnosisSafeTx(ctx, addr, gnosisTx, methodSelector)
-	if res != nil {
-		data, _ := json.Marshal(res) // can ignore error, marshalling what we just unmarshalled
-		l.log.Info("SignGnosisSafeTx", "type", "response", "data", string(data), "error", e)
-	} else {
-		l.log.Info("SignGnosisSafeTx", "type", "response", "data", res, "error", e)
-	}
-	return res, e
-}
-
-func (l *AuditLogger) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data apitypes.TypedData) (hexutil.Bytes, error) {
+func (l *AuditLogger) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {
 	l.log.Info("SignTypedData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
 		"addr", addr.String(), "data", data)
 	b, e := l.api.SignTypedData(ctx, addr, data)

@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -113,7 +114,7 @@ func (s *AESEncryptedStorage) Del(key string) {
 // readEncryptedStorage reads the file with encrypted creds
 func (s *AESEncryptedStorage) readEncryptedStorage() (map[string]storedCredential, error) {
 	creds := make(map[string]storedCredential)
-	raw, err := os.ReadFile(s.filename)
+	raw, err := ioutil.ReadFile(s.filename)
 
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -135,7 +136,7 @@ func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCrede
 	if err != nil {
 		return err
 	}
-	if err = os.WriteFile(s.filename, raw, 0600); err != nil {
+	if err = ioutil.WriteFile(s.filename, raw, 0600); err != nil {
 		return err
 	}
 	return nil

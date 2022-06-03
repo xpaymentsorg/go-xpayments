@@ -114,7 +114,6 @@ func TestEIP155SigningVitalik(t *testing.T) {
 
 	}
 }
-
 func TestChainId(t *testing.T) {
 	key, _ := defaultTestKey()
 

@@ -20,57 +20,39 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
-// apis returns the collection of built-in RPC APIs.
-func (n *Node) apis() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   &privateAdminAPI{n},
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   &publicAdminAPI{n},
-			Public:    true,
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   debug.Handler,
-		}, {
-			Namespace: "web3",
-			Version:   "1.0",
-			Service:   &publicWeb3API{n},
-			Public:    true,
-		},
-	}
+// PrivateAdminAPI is the collection of administrative API methods exposed only
+// over a secure RPC channel.
+type PrivateAdminAPI struct {
+	node *Node // Node interfaced by this API
 }
 
-// privateAdminAPI is the collection of administrative API methods exposed only
-// over a secure RPC channel.
-type privateAdminAPI struct {
-	node *Node // Node interfaced by this API
+// NewPrivateAdminAPI creates a new API definition for the private admin methods
+// of the node itself.
+func NewPrivateAdminAPI(node *Node) *PrivateAdminAPI {
+	return &PrivateAdminAPI{node: node}
 }
 
 // AddPeer requests connecting to a remote node, and also maintaining the new
 // connection at all times, even reconnecting if it is lost.
-func (api *privateAdminAPI) AddPeer(url string) (bool, error) {
+func (api *PrivateAdminAPI) AddPeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
 	if server == nil {
 		return false, ErrNodeStopped
 	}
 	// Try to add the url as a static peer and return
-	node, err := enode.Parse(enode.ValidSchemes, url)
+	node, err := discover.ParseNode(url)
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
@@ -78,15 +60,15 @@ func (api *privateAdminAPI) AddPeer(url string) (bool, error) {
 	return true, nil
 }
 
-// RemovePeer disconnects from a remote node if the connection exists
-func (api *privateAdminAPI) RemovePeer(url string) (bool, error) {
+// RemovePeer disconnects from a a remote node if the connection exists
+func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
 	if server == nil {
 		return false, ErrNodeStopped
 	}
 	// Try to remove the url as a static peer and return
-	node, err := enode.Parse(enode.ValidSchemes, url)
+	node, err := discover.ParseNode(url)
 	if err != nil {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
@@ -94,40 +76,9 @@ func (api *privateAdminAPI) RemovePeer(url string) (bool, error) {
 	return true, nil
 }
 
-// AddTrustedPeer allows a remote node to always connect, even if slots are full
-func (api *privateAdminAPI) AddTrustedPeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	node, err := enode.Parse(enode.ValidSchemes, url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.AddTrustedPeer(node)
-	return true, nil
-}
-
-// RemoveTrustedPeer removes a remote node from the trusted peer set, but it
-// does not disconnect it automatically.
-func (api *privateAdminAPI) RemoveTrustedPeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	node, err := enode.Parse(enode.ValidSchemes, url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.RemoveTrustedPeer(node)
-	return true, nil
-}
-
 // PeerEvents creates an RPC subscription which receives peer events from the
 // node's p2p.Server
-func (api *privateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
+func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
 	if server == nil {
@@ -143,15 +94,18 @@ func (api *privateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 
 	go func() {
 		events := make(chan *p2p.PeerEvent)
-		sub := server.SubscribeEvents(events)
-		defer sub.Unsubscribe()
+		server.SubscribeEvents(events, "node.PrivateAdminAPI-PeerEvents")
+		defer server.UnsubscribeEvents(events)
 
 		for {
 			select {
-			case event := <-events:
-				notifier.Notify(rpcSub.ID, event)
-			case <-sub.Err():
-				return
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
+				if err := notifier.Notify(rpcSub.ID, event); err != nil {
+					log.Error("Cannot notify peer event", "id", rpcSub.ID)
+				}
 			case <-rpcSub.Err():
 				return
 			case <-notifier.Closed():
@@ -163,12 +117,15 @@ func (api *privateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 	return rpcSub, nil
 }
 
-// StartHTTP starts the HTTP RPC API server.
-func (api *privateAdminAPI) StartHTTP(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
+// StartRPC starts the HTTP RPC API server.
+func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	// Determine host and port.
+	if api.node.httpHandler != nil {
+		return false, fmt.Errorf("HTTP RPC already running on %s", api.node.httpEndpoint)
+	}
+
 	if host == nil {
 		h := DefaultHTTPHost
 		if api.node.config.HTTPHost != "" {
@@ -180,69 +137,57 @@ func (api *privateAdminAPI) StartHTTP(host *string, port *int, cors *string, api
 		port = &api.node.config.HTTPPort
 	}
 
-	// Determine config.
-	config := httpConfig{
-		CorsAllowedOrigins: api.node.config.HTTPCors,
-		Vhosts:             api.node.config.HTTPVirtualHosts,
-		Modules:            api.node.config.HTTPModules,
-	}
+	allowedOrigins := api.node.config.HTTPCors
 	if cors != nil {
-		config.CorsAllowedOrigins = nil
+		allowedOrigins = nil
 		for _, origin := range strings.Split(*cors, ",") {
-			config.CorsAllowedOrigins = append(config.CorsAllowedOrigins, strings.TrimSpace(origin))
+			allowedOrigins = append(allowedOrigins, strings.TrimSpace(origin))
 		}
 	}
+
+	allowedVHosts := api.node.config.HTTPVirtualHosts
 	if vhosts != nil {
-		config.Vhosts = nil
+		allowedVHosts = nil
 		for _, vhost := range strings.Split(*host, ",") {
-			config.Vhosts = append(config.Vhosts, strings.TrimSpace(vhost))
+			allowedVHosts = append(allowedVHosts, strings.TrimSpace(vhost))
 		}
 	}
+
+	modules := api.node.httpWhitelist
 	if apis != nil {
-		config.Modules = nil
+		modules = nil
 		for _, m := range strings.Split(*apis, ",") {
-			config.Modules = append(config.Modules, strings.TrimSpace(m))
+			modules = append(modules, strings.TrimSpace(m))
 		}
 	}
 
-	if err := api.node.http.setListenAddr(*host, *port); err != nil {
-		return false, err
-	}
-	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
-		return false, err
-	}
-	if err := api.node.http.start(); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedVHosts, api.node.config.HTTPTimeouts, api.node.config.WSOrigins, api.node.config.HTTPTracing); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-// StartRPC starts the HTTP RPC API server.
-// Deprecated: use StartHTTP instead.
-func (api *privateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
-	log.Warn("Deprecation warning", "method", "admin.StartRPC", "use-instead", "admin.StartHTTP")
-	return api.StartHTTP(host, port, cors, apis, vhosts)
-}
-
-// StopHTTP shuts down the HTTP server.
-func (api *privateAdminAPI) StopHTTP() (bool, error) {
-	api.node.http.stop()
-	return true, nil
-}
-
-// StopRPC shuts down the HTTP server.
-// Deprecated: use StopHTTP instead.
-func (api *privateAdminAPI) StopRPC() (bool, error) {
-	log.Warn("Deprecation warning", "method", "admin.StopRPC", "use-instead", "admin.StopHTTP")
-	return api.StopHTTP()
-}
-
-// StartWS starts the websocket RPC API server.
-func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
+// StopRPC terminates an already running HTTP RPC API endpoint.
+func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	// Determine host and port.
+	if api.node.httpHandler == nil {
+		return false, fmt.Errorf("HTTP RPC not running")
+	}
+	api.node.stopHTTP()
+	return true, nil
+}
+
+// StartWS starts the websocket RPC API server.
+func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
+	api.node.lock.Lock()
+	defer api.node.lock.Unlock()
+
+	if api.node.wsHandler != nil {
+		return false, fmt.Errorf("WebSocket RPC already running on %s", api.node.wsEndpoint)
+	}
+
 	if host == nil {
 		h := DefaultWSHost
 		if api.node.config.WSHost != "" {
@@ -254,57 +199,55 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		port = &api.node.config.WSPort
 	}
 
-	// Determine config.
-	config := wsConfig{
-		Modules: api.node.config.WSModules,
-		Origins: api.node.config.WSOrigins,
-		// ExposeAll: api.node.config.WSExposeAll,
-	}
-	if apis != nil {
-		config.Modules = nil
-		for _, m := range strings.Split(*apis, ",") {
-			config.Modules = append(config.Modules, strings.TrimSpace(m))
-		}
-	}
+	origins := api.node.config.WSOrigins
 	if allowedOrigins != nil {
-		config.Origins = nil
+		origins = nil
 		for _, origin := range strings.Split(*allowedOrigins, ",") {
-			config.Origins = append(config.Origins, strings.TrimSpace(origin))
+			origins = append(origins, strings.TrimSpace(origin))
 		}
 	}
 
-	// Enable WebSocket on the server.
-	server := api.node.wsServerForPort(*port, false)
-	if err := server.setListenAddr(*host, *port); err != nil {
+	modules := api.node.config.WSModules
+	if apis != nil {
+		modules = nil
+		for _, m := range strings.Split(*apis, ",") {
+			modules = append(modules, strings.TrimSpace(m))
+		}
+	}
+
+	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, origins, api.node.config.WSExposeAll); err != nil {
 		return false, err
 	}
-	openApis, _ := api.node.GetAPIs()
-	if err := server.enableWS(openApis, config); err != nil {
-		return false, err
-	}
-	if err := server.start(); err != nil {
-		return false, err
-	}
-	api.node.http.log.Info("WebSocket endpoint opened", "url", api.node.WSEndpoint())
 	return true, nil
 }
 
-// StopWS terminates all WebSocket servers.
-func (api *privateAdminAPI) StopWS() (bool, error) {
-	api.node.http.stopWS()
-	api.node.ws.stop()
+// StopRPC terminates an already running websocket RPC API endpoint.
+func (api *PrivateAdminAPI) StopWS() (bool, error) {
+	api.node.lock.Lock()
+	defer api.node.lock.Unlock()
+
+	if api.node.wsHandler == nil {
+		return false, fmt.Errorf("WebSocket RPC not running")
+	}
+	api.node.stopWS()
 	return true, nil
 }
 
-// publicAdminAPI is the collection of administrative API methods exposed over
+// PublicAdminAPI is the collection of administrative API methods exposed over
 // both secure and unsecure RPC channels.
-type publicAdminAPI struct {
+type PublicAdminAPI struct {
 	node *Node // Node interfaced by this API
+}
+
+// NewPublicAdminAPI creates a new API definition for the public admin methods
+// of the node itself.
+func NewPublicAdminAPI(node *Node) *PublicAdminAPI {
+	return &PublicAdminAPI{node: node}
 }
 
 // Peers retrieves all the information we know about each individual peer at the
 // protocol granularity.
-func (api *publicAdminAPI) Peers() ([]*p2p.PeerInfo, error) {
+func (api *PublicAdminAPI) Peers() ([]*p2p.PeerInfo, error) {
 	server := api.node.Server()
 	if server == nil {
 		return nil, ErrNodeStopped
@@ -314,7 +257,7 @@ func (api *publicAdminAPI) Peers() ([]*p2p.PeerInfo, error) {
 
 // NodeInfo retrieves all the information we know about the host node at the
 // protocol granularity.
-func (api *publicAdminAPI) NodeInfo() (*p2p.NodeInfo, error) {
+func (api *PublicAdminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 	server := api.node.Server()
 	if server == nil {
 		return nil, ErrNodeStopped
@@ -323,22 +266,132 @@ func (api *publicAdminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 }
 
 // Datadir retrieves the current data directory the node is using.
-func (api *publicAdminAPI) Datadir() string {
+func (api *PublicAdminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
-// publicWeb3API offers helper utils
-type publicWeb3API struct {
+// PublicDebugAPI is the collection of debugging related API methods exposed over
+// both secure and unsecure RPC channels.
+type PublicDebugAPI struct {
+	node *Node // Node interfaced by this API
+}
+
+// NewPublicDebugAPI creates a new API definition for the public debug methods
+// of the node itself.
+func NewPublicDebugAPI(node *Node) *PublicDebugAPI {
+	return &PublicDebugAPI{node: node}
+}
+
+// Metrics retrieves all the known system metric collected by the node.
+func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
+	// Create a rate formatter
+	units := []string{"", "K", "M", "G", "T", "E", "P"}
+	round := func(value float64, prec int) string {
+		unit := 0
+		for value >= 1000 {
+			unit, value, prec = unit+1, value/1000, 2
+		}
+		return fmt.Sprintf(fmt.Sprintf("%%.%df%s", prec, units[unit]), value)
+	}
+	format := func(total float64, rate float64) string {
+		return fmt.Sprintf("%s (%s/s)", round(total, 0), round(rate, 2))
+	}
+	// Iterate over all the metrics, and just dump for now
+	counters := make(map[string]interface{})
+	metrics.DefaultRegistry.Each(func(name string, metric interface{}) {
+		// Create or retrieve the counter hierarchy for this metric
+		root, parts := counters, strings.Split(name, "/")
+		for _, part := range parts[:len(parts)-1] {
+			if _, ok := root[part]; !ok {
+				root[part] = make(map[string]interface{})
+			}
+			root = root[part].(map[string]interface{})
+		}
+		name = parts[len(parts)-1]
+
+		// Fill the counter with the metric details, formatting if requested
+		if raw {
+			switch metric := metric.(type) {
+			case metrics.Meter:
+				root[name] = map[string]interface{}{
+					"AvgRate01Min": metric.Rate1(),
+					"AvgRate05Min": metric.Rate5(),
+					"AvgRate15Min": metric.Rate15(),
+					"MeanRate":     metric.RateMean(),
+					"Overall":      float64(metric.Count()),
+				}
+
+			case metrics.Timer:
+				root[name] = map[string]interface{}{
+					"AvgRate01Min": metric.Rate1(),
+					"AvgRate05Min": metric.Rate5(),
+					"AvgRate15Min": metric.Rate15(),
+					"MeanRate":     metric.RateMean(),
+					"Overall":      float64(metric.Count()),
+					"Percentiles": map[string]interface{}{
+						"5":  metric.Percentile(0.05),
+						"20": metric.Percentile(0.2),
+						"50": metric.Percentile(0.5),
+						"80": metric.Percentile(0.8),
+						"95": metric.Percentile(0.95),
+					},
+				}
+
+			default:
+				root[name] = "Unknown metric type"
+			}
+		} else {
+			switch metric := metric.(type) {
+			case metrics.Meter:
+				root[name] = map[string]interface{}{
+					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+					"Overall":  format(float64(metric.Count()), metric.RateMean()),
+				}
+
+			case metrics.Timer:
+				root[name] = map[string]interface{}{
+					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
+					"Avg05Min": format(metric.Rate5()*300, metric.Rate5()),
+					"Avg15Min": format(metric.Rate15()*900, metric.Rate15()),
+					"Overall":  format(float64(metric.Count()), metric.RateMean()),
+					"Maximum":  time.Duration(metric.Max()).String(),
+					"Minimum":  time.Duration(metric.Min()).String(),
+					"Percentiles": map[string]interface{}{
+						"5":  time.Duration(metric.Percentile(0.05)).String(),
+						"20": time.Duration(metric.Percentile(0.2)).String(),
+						"50": time.Duration(metric.Percentile(0.5)).String(),
+						"80": time.Duration(metric.Percentile(0.8)).String(),
+						"95": time.Duration(metric.Percentile(0.95)).String(),
+					},
+				}
+
+			default:
+				root[name] = "Unknown metric type"
+			}
+		}
+	})
+	return counters, nil
+}
+
+// PublicWeb3API offers helper utils
+type PublicWeb3API struct {
 	stack *Node
 }
 
+// NewPublicWeb3API creates a new Web3Service instance
+func NewPublicWeb3API(stack *Node) *PublicWeb3API {
+	return &PublicWeb3API{stack}
+}
+
 // ClientVersion returns the node name
-func (s *publicWeb3API) ClientVersion() string {
+func (s *PublicWeb3API) ClientVersion() string {
 	return s.stack.Server().Name
 }
 
 // Sha3 applies the ethereum sha3 implementation on the input.
 // It assumes the input is hex encoded.
-func (s *publicWeb3API) Sha3(input hexutil.Bytes) hexutil.Bytes {
+func (s *PublicWeb3API) Sha3(input hexutil.Bytes) hexutil.Bytes {
 	return crypto.Keccak256(input)
 }

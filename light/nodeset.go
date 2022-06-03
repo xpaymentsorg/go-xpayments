@@ -17,12 +17,11 @@
 package light
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 )
 
@@ -60,15 +59,6 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	return nil
 }
 
-// Delete removes a node from the set
-func (db *NodeSet) Delete(key []byte) error {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	delete(db.nodes, string(key))
-	return nil
-}
-
 // Get returns a stored node
 func (db *NodeSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
@@ -77,7 +67,7 @@ func (db *NodeSet) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.nodes[string(key)]; ok {
 		return entry, nil
 	}
-	return nil, errors.New("not found")
+	return nil, common.ErrNotFound
 }
 
 // Has returns true if the node set contains the given key
@@ -115,22 +105,26 @@ func (db *NodeSet) NodeList() NodeList {
 }
 
 // Store writes the contents of the set to the given database
-func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
+func (db *NodeSet) Store(target common.Putter) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
 	for key, value := range db.nodes {
-		target.Put([]byte(key), value)
+		if err := target.Put([]byte(key), value); err != nil {
+			log.Error("Cannot write node set", "err", err)
+		}
 	}
 }
 
-// NodeList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
+// NodeList stores an ordered list of trie nodes. It implements common.Putter.
 type NodeList []rlp.RawValue
 
 // Store writes the contents of the list to the given database
-func (n NodeList) Store(db ethdb.KeyValueWriter) {
+func (n NodeList) Store(db common.Putter) {
 	for _, node := range n {
-		db.Put(crypto.Keccak256(node), node)
+		if err := db.Put(crypto.Keccak256(node), node); err != nil {
+			log.Error("Cannot write node list", "err", err)
+		}
 	}
 }
 
@@ -145,11 +139,6 @@ func (n NodeList) NodeSet() *NodeSet {
 func (n *NodeList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
-}
-
-// Delete panics as there's no reason to remove a node from the list.
-func (n *NodeList) Delete(key []byte) error {
-	panic("not supported")
 }
 
 // DataSize returns the aggregated data size of nodes in the list

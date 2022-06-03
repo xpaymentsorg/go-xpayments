@@ -21,7 +21,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
@@ -56,9 +55,10 @@ func newTxJournal(path string) *txJournal {
 
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
-func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
+func (journal *txJournal) load(add func(types.Transactions) []error) error {
+	const batchSize = 1000
 	// Skip the parsing if the journal file doesn't exist at all
-	if !common.FileExist(journal.path) {
+	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
 	}
 	// Open the journal for loading any past transactions
@@ -74,44 +74,43 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 
 	// Inject all transactions from the journal into the pool
 	stream := rlp.NewStream(input, 0)
+	defer rlp.Discard(stream)
 	total, dropped := 0, 0
 
-	// Create a method to load a limited batch of transactions and bump the
-	// appropriate progress counters. Then use this method to load all the
-	// journaled transactions in small-ish batches.
-	loadBatch := func(txs types.Transactions) {
-		for _, err := range add(txs) {
-			if err != nil {
-				log.Debug("Failed to add journaled transaction", "err", err)
-				dropped++
-			}
+	var failure error
+	var batch types.Transactions
+	addBatch := func() {
+		if errs := add(batch); len(errs) > 0 {
+			dropped += len(errs)
+			log.Debug("Failed to add journaled transactions", "errs", len(errs))
 		}
+		batch = batch[:0]
 	}
-	var (
-		failure error
-		batch   types.Transactions
-	)
 	for {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
-		if err = stream.Decode(tx); err != nil {
+		if err := stream.Decode(tx); err != nil {
 			if err != io.EOF {
 				failure = err
-			}
-			if batch.Len() > 0 {
-				loadBatch(batch)
 			}
 			break
 		}
 		// New transaction parsed, queue up for later, import if threshold is reached
 		total++
-
-		if batch = append(batch, tx); batch.Len() > 1024 {
-			loadBatch(batch)
-			batch = batch[:0]
+		batch = append(batch, tx)
+		if len(batch) >= batchSize {
+			addBatch()
 		}
 	}
+	if len(batch) > 0 {
+		addBatch()
+	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
+
+	// Verify input closes without error.
+	if err := input.Close(); err != nil {
+		return err
+	}
 
 	return failure
 }
@@ -129,7 +128,7 @@ func (journal *txJournal) insert(tx *types.Transaction) error {
 
 // rotate regenerates the transaction journal based on the current contents of
 // the transaction pool.
-func (journal *txJournal) rotate(all map[common.Address]types.Transactions) error {
+func (journal *txJournal) rotate(acts int, all types.Transactions) error {
 	// Close the current journal (if any is open)
 	if journal.writer != nil {
 		if err := journal.writer.Close(); err != nil {
@@ -138,32 +137,30 @@ func (journal *txJournal) rotate(all map[common.Address]types.Transactions) erro
 		journal.writer = nil
 	}
 	// Generate a new journal with the contents of the current pool
-	replacement, err := os.OpenFile(journal.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	replacement, err := os.OpenFile(journal.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
-	journaled := 0
-	for _, txs := range all {
-		for _, tx := range txs {
-			if err = rlp.Encode(replacement, tx); err != nil {
-				replacement.Close()
-				return err
-			}
+	for _, tx := range all {
+		if err = rlp.Encode(replacement, tx); err != nil {
+			_ = replacement.Close()
+			return err
 		}
-		journaled += len(txs)
 	}
-	replacement.Close()
+	if err := replacement.Close(); err != nil {
+		return err
+	}
 
 	// Replace the live journal with the newly generated one
 	if err = os.Rename(journal.path+".new", journal.path); err != nil {
 		return err
 	}
-	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_APPEND, 0644)
+	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_APPEND, 0755)
 	if err != nil {
 		return err
 	}
 	journal.writer = sink
-	log.Info("Regenerated local transaction journal", "transactions", journaled, "accounts", len(all))
+	log.Info("Regenerated local transaction journal", "transactions", len(all), "accounts", acts)
 
 	return nil
 }

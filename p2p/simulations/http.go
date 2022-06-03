@@ -22,8 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,7 +33,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"github.com/xpaymentsorg/go-xpayments/p2p/simulations/adapters"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
@@ -111,7 +111,7 @@ func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		response, _ := io.ReadAll(res.Body)
+		response, _ := ioutil.ReadAll(res.Body)
 		res.Body.Close()
 		return nil, fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
@@ -251,7 +251,7 @@ func (c *Client) Send(method, path string, in, out interface{}) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
-		response, _ := io.ReadAll(res.Body)
+		response, _ := ioutil.ReadAll(res.Body)
 		return fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
 	if out != nil {
@@ -336,7 +336,7 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	mockerType := req.FormValue("mocker-type")
 	mockerFn := LookupMocker(mockerType)
 	if mockerFn == nil {
-		http.Error(w, fmt.Sprintf("unknown mocker type %q", html.EscapeString(mockerType)), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unknown mocker type %q", mockerType), http.StatusBadRequest)
 		return
 	}
 	nodeCount, err := strconv.Atoi(req.FormValue("node-count"))
@@ -381,8 +381,14 @@ func (s *Server) ResetNetwork(w http.ResponseWriter, req *http.Request) {
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	events := make(chan *Event)
-	sub := s.network.events.Subscribe(events)
-	defer sub.Unsubscribe()
+	s.network.events.Subscribe(events, "simulations.Server-StreamNetworkEvents")
+	defer s.network.events.Unsubscribe(events)
+
+	// stop the stream if the client goes away
+	var clientGone <-chan bool
+	if cn, ok := w.(http.CloseNotifier); ok {
+		clientGone = cn.CloseNotify()
+	}
 
 	// write writes the given event and data to the stream like:
 	//
@@ -449,10 +455,12 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	clientGone := req.Context().Done()
 	for {
 		select {
-		case event := <-events:
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
 			// only send message events which match the filters
 			if event.Msg != nil && !filters.Match(event.Msg) {
 				continue
@@ -556,8 +564,7 @@ func (s *Server) LoadSnapshot(w http.ResponseWriter, req *http.Request) {
 
 // CreateNode creates a node in the network using the given configuration
 func (s *Server) CreateNode(w http.ResponseWriter, req *http.Request) {
-	config := &adapters.NodeConfig{}
-
+	config := adapters.RandomNodeConfig()
 	err := json.NewDecoder(req.Body).Decode(config)
 	if err != nil && err != io.EOF {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -698,19 +705,18 @@ func (s *Server) JSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// wrapHandler returns an httprouter.Handle which wraps an http.HandlerFunc by
+// wrapHandler returns a httprouter.Handle which wraps a http.HandlerFunc by
 // populating request.Context with any objects from the URL params
 func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 
-		ctx := req.Context()
+		ctx := context.Background()
 
 		if id := params.ByName("nodeid"); id != "" {
-			var nodeID enode.ID
 			var node *Node
-			if nodeID.UnmarshalText([]byte(id)) == nil {
+			if nodeID, err := discover.HexID(id); err == nil {
 				node = s.network.GetNode(nodeID)
 			} else {
 				node = s.network.GetNodeByName(id)
@@ -723,9 +729,8 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 		}
 
 		if id := params.ByName("peerid"); id != "" {
-			var peerID enode.ID
 			var peer *Node
-			if peerID.UnmarshalText([]byte(id)) == nil {
+			if peerID, err := discover.HexID(id); err == nil {
 				peer = s.network.GetNode(peerID)
 			} else {
 				peer = s.network.GetNodeByName(id)

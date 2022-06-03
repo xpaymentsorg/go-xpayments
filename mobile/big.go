@@ -16,7 +16,7 @@
 
 // Contains all the wrappers from the math/big package.
 
-package geth
+package gpay
 
 import (
 	"errors"
@@ -33,16 +33,6 @@ type BigInt struct {
 // NewBigInt allocates and returns a new BigInt set to x.
 func NewBigInt(x int64) *BigInt {
 	return &BigInt{big.NewInt(x)}
-}
-
-// NewBigIntFromString allocates and returns a new BigInt set to x
-// interpreted in the provided base.
-func NewBigIntFromString(x string, base int) *BigInt {
-	b, success := new(big.Int).SetString(x, base)
-	if !success {
-		return nil
-	}
-	return &BigInt{b}
 }
 
 // GetBytes returns the absolute value of x as a big-endian byte slice.
@@ -93,13 +83,6 @@ func (bi *BigInt) SetString(x string, base int) {
 
 // BigInts represents a slice of big ints.
 type BigInts struct{ bigints []*big.Int }
-
-// NewBigInts creates a slice of uninitialized big numbers.
-func NewBigInts(size int) *BigInts {
-	return &BigInts{
-		bigints: make([]*big.Int, size),
-	}
-}
 
 // Size returns the number of big ints in the slice.
 func (bi *BigInts) Size() int {

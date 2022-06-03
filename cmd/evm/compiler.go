@@ -19,11 +19,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
+	"io/ioutil"
 
+	cli "github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/cmd/evm/internal/compiler"
-
-	"gopkg.in/urfave/cli.v1"
 )
 
 var compileCommand = cli.Command{
@@ -41,7 +40,7 @@ func compileCmd(ctx *cli.Context) error {
 	}
 
 	fn := ctx.Args().First()
-	src, err := os.ReadFile(fn)
+	src, err := ioutil.ReadFile(fn)
 	if err != nil {
 		return err
 	}

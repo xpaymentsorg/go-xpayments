@@ -17,7 +17,7 @@
 package main
 
 import (
-	"os"
+	"io/ioutil"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -33,7 +33,7 @@ import (
 // are copied into a temporary keystore directory.
 
 func tmpDatadirWithKeystore(t *testing.T) string {
-	datadir := t.TempDir()
+	datadir := tmpdir(t)
 	keystore := filepath.Join(datadir, "keystore")
 	source := filepath.Join("..", "..", "accounts", "keystore", "testdata", "keystore")
 	if err := cp.CopyAll(keystore, source); err != nil {
@@ -43,22 +43,22 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
-	gpay := runGpay(t, "account", "list")
-	gpay.ExpectExit()
+	geth := runGpay(t, "account", "list")
+	geth.ExpectExit()
 }
 
 func TestAccountList(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	gpay := runGpay(t, "account", "list", "--datadir", datadir)
-	defer gpay.ExpectExit()
+	geth := runGpay(t, "account", "list", "--datadir", datadir)
+	defer geth.ExpectExit()
 	if runtime.GOOS == "windows" {
-		gpay.Expect(`
+		geth.Expect(`
 Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
 Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}\keystore\aaa
 Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}\keystore\zzz
 `)
 	} else {
-		gpay.Expect(`
+		geth.Expect(`
 Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
 Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}/keystore/aaa
 Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}/keystore/zzz
@@ -67,9 +67,9 @@ Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}/k
 }
 
 func TestAccountNew(t *testing.T) {
-	gpay := runGpay(t, "account", "new", "--lightkdf")
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	geth := runGpay(t, "account", "new", "--lightkdf")
+	defer geth.ExpectExit()
+	geth.Expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar"}}
@@ -77,7 +77,7 @@ Repeat password: {{.InputLine "foobar"}}
 
 Your new key was generated
 `)
-	gpay.ExpectRegexp(`
+	geth.ExpectRegexp(`
 Public address of the key:   0x[0-9a-fA-F]{40}
 Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 
@@ -102,7 +102,6 @@ func TestAccountImport(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			importAccountWithExpect(t, test.key, test.output)
@@ -111,24 +110,24 @@ func TestAccountImport(t *testing.T) {
 }
 
 func importAccountWithExpect(t *testing.T, key string, expected string) {
-	dir := t.TempDir()
+	dir := tmpdir(t)
 	keyfile := filepath.Join(dir, "key.prv")
-	if err := os.WriteFile(keyfile, []byte(key), 0600); err != nil {
+	if err := ioutil.WriteFile(keyfile, []byte(key), 0600); err != nil {
 		t.Error(err)
 	}
 	passwordFile := filepath.Join(dir, "password.txt")
-	if err := os.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
+	if err := ioutil.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
 		t.Error(err)
 	}
-	gpay := runGpay(t, "--lightkdf", "account", "import", keyfile, "-password", passwordFile)
-	defer gpay.ExpectExit()
-	gpay.Expect(expected)
+	geth := runGpay(t, "account", "import", keyfile, "-password", passwordFile)
+	defer geth.ExpectExit()
+	geth.Expect(expected)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
-	gpay := runGpay(t, "account", "new", "--lightkdf")
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	geth := runGpay(t, "account", "new", "--lightkdf")
+	defer geth.ExpectExit()
+	geth.Expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "something"}}
@@ -139,11 +138,11 @@ Fatal: Passwords do not match
 
 func TestAccountUpdate(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	gpay := runGpay(t, "account", "update",
+	geth := runGpay(t, "account", "update",
 		"--datadir", datadir, "--lightkdf",
 		"f466859ead1932d743d622cb74fc058882e8648a")
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	defer geth.ExpectExit()
+	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar"}}
@@ -154,24 +153,24 @@ Repeat password: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
-	gpay := runGpay(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	geth := runGpay(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	defer geth.ExpectExit()
+	geth.Expect(`
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foo"}}
 Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 `)
 
-	files, err := os.ReadDir(filepath.Join(gpay.Datadir, "keystore"))
+	files, err := ioutil.ReadDir(filepath.Join(geth.Datadir, "keystore"))
 	if len(files) != 1 {
 		t.Errorf("expected one key file in keystore directory, found %d files (error: %v)", len(files), err)
 	}
 }
 
 func TestWalletImportBadPassword(t *testing.T) {
-	gpay := runGpay(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	geth := runGpay(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	defer geth.ExpectExit()
+	geth.Expect(`
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "wrong"}}
 Fatal: could not decrypt key with given password
@@ -179,32 +178,36 @@ Fatal: could not decrypt key with given password
 }
 
 func TestUnlockFlag(t *testing.T) {
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "js", "testdata/empty.js")
-	gpay.Expect(`
+	datadir := tmpDatadirWithKeystore(t)
+	geth := runGpay(t,
+		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
+		"js", "testdata/empty.js")
+	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar"}}
 `)
-	gpay.ExpectExit()
+	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
 		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(gpay.StderrText(), m) {
+		if !strings.Contains(geth.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
 }
 
 func TestUnlockFlagWrongPassword(t *testing.T) {
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "js", "testdata/empty.js")
-
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	datadir := tmpDatadirWithKeystore(t)
+	geth := runGpay(t,
+		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
+	defer geth.ExpectExit()
+	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "wrong1"}}
@@ -216,19 +219,21 @@ Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could 
 `)
 }
 
-// https://github.com/xpaymentsorg/go-xpayments/issues/1785
+// https://github.com/ethereum/go-ethereum/issues/1785
 func TestUnlockFlagMultiIndex(t *testing.T) {
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--unlock", "0,2", "js", "testdata/empty.js")
-
-	gpay.Expect(`
+	datadir := tmpDatadirWithKeystore(t)
+	geth := runGpay(t,
+		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--unlock", "0,2",
+		"js", "testdata/empty.js")
+	geth.Expect(`
 Unlocking account 0 | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar"}}
 Unlocking account 2 | Attempt 1/3
 Password: {{.InputLine "foobar"}}
 `)
-	gpay.ExpectExit()
+	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
@@ -236,17 +241,19 @@ Password: {{.InputLine "foobar"}}
 		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(gpay.StderrText(), m) {
+		if !strings.Contains(geth.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
 }
 
 func TestUnlockFlagPasswordFile(t *testing.T) {
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--password", "testdata/passwords.txt", "--unlock", "0,2", "js", "testdata/empty.js")
-
-	gpay.ExpectExit()
+	datadir := tmpDatadirWithKeystore(t)
+	geth := runGpay(t,
+		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--password", "testdata/passwords.txt", "--unlock", "0,2",
+		"js", "testdata/empty.js")
+	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
@@ -254,36 +261,37 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(gpay.StderrText(), m) {
+		if !strings.Contains(geth.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
 }
 
 func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--password",
-		"testdata/wrong-passwords.txt", "--unlock", "0,2")
-	defer gpay.ExpectExit()
-	gpay.Expect(`
+	datadir := tmpDatadirWithKeystore(t)
+	geth := runGpay(t,
+		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--password", "testdata/wrong-passwords.txt", "--unlock", "0,2")
+	defer geth.ExpectExit()
+	geth.Expect(`
 Fatal: Failed to unlock account 0 (could not decrypt key with given password)
 `)
 }
 
 func TestUnlockFlagAmbiguous(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--keystore",
-		store, "--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
+	geth := runGpay(t,
+		"--keystore", store, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
 		"js", "testdata/empty.js")
-	defer gpay.ExpectExit()
+	defer geth.ExpectExit()
 
 	// Helper for the expect template, returns absolute keystore path.
-	gpay.SetTemplateFunc("keypath", func(file string) string {
+	geth.SetTemplateFunc("keypath", func(file string) string {
 		abs, _ := filepath.Abs(filepath.Join(store, file))
 		return abs
 	})
-	gpay.Expect(`
+	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar"}}
@@ -295,14 +303,14 @@ Your password unlocked keystore://{{keypath "1"}}
 In order to avoid this warning, you need to remove the following duplicate key files:
    keystore://{{keypath "2"}}
 `)
-	gpay.ExpectExit()
+	geth.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
 		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(gpay.StderrText(), m) {
+		if !strings.Contains(geth.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -310,18 +318,17 @@ In order to avoid this warning, you need to remove the following duplicate key f
 
 func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
-	gpay := runMinimalGpay(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--keystore",
-		store, "--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
-
-	defer gpay.ExpectExit()
+	geth := runGpay(t,
+		"--keystore", store, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
+		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
+	defer geth.ExpectExit()
 
 	// Helper for the expect template, returns absolute keystore path.
-	gpay.SetTemplateFunc("keypath", func(file string) string {
+	geth.SetTemplateFunc("keypath", func(file string) string {
 		abs, _ := filepath.Abs(filepath.Join(store, file))
 		return abs
 	})
-	gpay.Expect(`
+	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "wrong"}}
@@ -331,5 +338,5 @@ Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
 Testing your password against all of them...
 Fatal: None of the listed files could be unlocked.
 `)
-	gpay.ExpectExit()
+	geth.ExpectExit()
 }

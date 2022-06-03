@@ -18,15 +18,18 @@ package filters
 
 import (
 	"context"
+	"io/ioutil"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
@@ -40,10 +43,14 @@ func makeReceipt(addr common.Address) *types.Receipt {
 }
 
 func BenchmarkFilters(b *testing.B) {
-	dir := b.TempDir()
+	dir, err := ioutil.TempDir("", "filtertest")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
 
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
+		db      = ethdb.NewDB(dir)
 		backend = &testBackend{db: db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
@@ -51,35 +58,34 @@ func BenchmarkFilters(b *testing.B) {
 		addr3   = common.BytesToAddress([]byte("ethereum"))
 		addr4   = common.BytesToAddress([]byte("random addresses please"))
 	)
+	if err := db.Open(); err != nil {
+		b.Fatal(err)
+	}
 	defer db.Close()
 
 	genesis := core.GenesisBlockForTesting(db, addr1, big.NewInt(1000000))
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 100010, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, clique.NewFaker(), db, 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		case 1034:
 			receipt := makeReceipt(addr2)
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		case 34:
 			receipt := makeReceipt(addr3)
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		case 99999:
 			receipt := makeReceipt(addr4)
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 
 		}
 	})
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+		rawdb.WriteHeadBlockHash(db.GlobalTable(), block.Hash())
+		rawdb.WriteReceipts(db.ReceiptTable(), block.Hash(), block.NumberU64(), receipts[i])
 	}
 	b.ResetTimer()
 
@@ -94,10 +100,14 @@ func BenchmarkFilters(b *testing.B) {
 }
 
 func TestFilters(t *testing.T) {
-	dir := t.TempDir()
+	dir, err := ioutil.TempDir("", "filtertest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
 
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
+		db      = ethdb.NewDB(dir)
 		backend = &testBackend{db: db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
@@ -107,10 +117,13 @@ func TestFilters(t *testing.T) {
 		hash3 = common.BytesToHash([]byte("topic3"))
 		hash4 = common.BytesToHash([]byte("topic4"))
 	)
+	if err := db.Open(); err != nil {
+		t.Fatal(err)
+	}
 	defer db.Close()
 
 	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, clique.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, false, 0)
@@ -121,7 +134,7 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, gen.BaseFee(), nil))
+			gen.AddUncheckedTx(types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil))
 		case 2:
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
@@ -131,8 +144,7 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, gen.BaseFee(), nil))
-
+			gen.AddUncheckedTx(types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil))
 		case 998:
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
@@ -142,7 +154,7 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(998, common.HexToAddress("0x998"), big.NewInt(998), 998, gen.BaseFee(), nil))
+			gen.AddUncheckedTx(types.NewTransaction(998, common.HexToAddress("0x998"), big.NewInt(998), 998, big.NewInt(998), nil))
 		case 999:
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
@@ -152,14 +164,14 @@ func TestFilters(t *testing.T) {
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
+			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, big.NewInt(999), nil))
 		}
 	})
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
+		rawdb.WriteHeadBlockHash(db.GlobalTable(), block.Hash())
+		rawdb.WriteReceipts(db.ReceiptTable(), block.Hash(), block.NumberU64(), receipts[i])
 	}
 
 	filter := NewRangeFilter(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})

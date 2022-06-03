@@ -19,12 +19,11 @@ package downloader
 import "fmt"
 
 // SyncMode represents the synchronisation mode of the downloader.
-// It is a uint32 as it is used with atomic operations.
-type SyncMode uint32
+type SyncMode int
 
 const (
 	FullSync  SyncMode = iota // Synchronise the entire blockchain history from full blocks
-	SnapSync                  // Download the chain and the state via compact snapshots
+	FastSync                  // Quickly download the headers, full sync only at the chain head
 	LightSync                 // Download only the headers and terminate afterwards
 )
 
@@ -37,8 +36,8 @@ func (mode SyncMode) String() string {
 	switch mode {
 	case FullSync:
 		return "full"
-	case SnapSync:
-		return "snap"
+	case FastSync:
+		return "fast"
 	case LightSync:
 		return "light"
 	default:
@@ -50,8 +49,8 @@ func (mode SyncMode) MarshalText() ([]byte, error) {
 	switch mode {
 	case FullSync:
 		return []byte("full"), nil
-	case SnapSync:
-		return []byte("snap"), nil
+	case FastSync:
+		return []byte("fast"), nil
 	case LightSync:
 		return []byte("light"), nil
 	default:
@@ -63,12 +62,12 @@ func (mode *SyncMode) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case "full":
 		*mode = FullSync
-	case "snap":
-		*mode = SnapSync
+	case "fast":
+		*mode = FastSync
 	case "light":
 		*mode = LightSync
 	default:
-		return fmt.Errorf(`unknown sync mode %q, want "full", "snap" or "light"`, text)
+		return fmt.Errorf(`unknown sync mode %q, want "full", "fast" or "light"`, text)
 	}
 	return nil
 }

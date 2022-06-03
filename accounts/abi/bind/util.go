@@ -21,7 +21,6 @@ import (
 	"errors"
 	"time"
 
-	ethereum "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -36,16 +35,14 @@ func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*ty
 	logger := log.New("hash", tx.Hash())
 	for {
 		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
-		if err == nil {
+		if receipt != nil {
 			return receipt, nil
 		}
-
-		if errors.Is(err, ethereum.NotFound) {
-			logger.Trace("Transaction not yet mined")
-		} else {
+		if err != nil {
 			logger.Trace("Receipt retrieval failed", "err", err)
+		} else {
+			logger.Trace("Transaction not yet mined")
 		}
-
 		// Wait for the next round.
 		select {
 		case <-ctx.Done():

@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
@@ -36,19 +36,19 @@ type testTxRelay struct {
 	send, discard, mined chan int
 }
 
-func (self *testTxRelay) Send(txs types.Transactions) {
-	self.send <- len(txs)
+func (t *testTxRelay) Send(txs types.Transactions) {
+	t.send <- len(txs)
 }
 
-func (self *testTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+func (t *testTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
 	m := len(mined)
 	if m != 0 {
-		self.mined <- m
+		t.mined <- m
 	}
 }
 
-func (self *testTxRelay) Discard(hashes []common.Hash) {
-	self.discard <- len(hashes)
+func (t *testTxRelay) Discard(hashes []common.Hash) {
+	t.discard <- len(hashes)
 }
 
 const poolTestTxs = 1000
@@ -76,34 +76,32 @@ func txPoolTestChainGen(i int, block *core.BlockGen) {
 }
 
 func TestTxPool(t *testing.T) {
+	ctx := context.Background()
 	for i := range testTx {
-		testTx[i], _ = types.SignTx(types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), types.HomesteadSigner{}, testBankKey)
+		testTx[i], _ = types.SignTx(types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	}
 
 	var (
-		sdb   = rawdb.NewMemoryDatabase()
-		ldb   = rawdb.NewMemoryDatabase()
-		gspec = core.Genesis{
-			Alloc:   core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
-		}
+		sdb     = ethdb.NewMemDatabase()
+		ldb     = ethdb.NewMemDatabase()
+		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
 		genesis = gspec.MustCommit(sdb)
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, poolTestBlocks, txPoolTestChainGen)
+	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, clique.NewFullFaker(), vm.Config{})
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, clique.NewFaker(), sdb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
+	odr := &testOdr{sdb: sdb, ldb: ldb}
 	relay := &testTxRelay{
 		send:    make(chan int, 1),
 		discard: make(chan int, 1),
 		mined:   make(chan int, 1),
 	}
-	lightchain, _ := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker(), nil)
+	lightchain, _ := NewLightChain(odr, params.TestChainConfig, clique.NewFullFaker())
 	txPermanent = 50
 	pool := NewTxPool(params.TestChainConfig, lightchain, relay)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)

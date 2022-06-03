@@ -1,127 +1,223 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package clique
 
 import (
-	"math/big"
+	"bytes"
+	"sort"
 	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
-// This test case is a repro of an annoying bug that took us forever to catch.
-// In Clique PoA networks (Rinkeby, Görli, etc), consecutive blocks might have
-// the same state root (no block subsidy, empty block). If a node crashes, the
-// chain ends up losing the recent state and needs to regenerate it from blocks
-// already in the database. The bug was that processing the block *prior* to an
-// empty one **also completes** the empty one, ending up in a known-block error.
-func TestReimportMirroredState(t *testing.T) {
-	// Initialize a Clique chain with a single signer
-	var (
-		db     = rawdb.NewMemoryDatabase()
-		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr   = crypto.PubkeyToAddress(key.PublicKey)
-		engine = New(params.AllCliqueProtocolChanges.Clique, db)
-		signer = new(types.HomesteadSigner)
-	)
-	genspec := &core.Genesis{
-		ExtraData: make([]byte, extraVanity+common.AddressLength+extraSeal),
-		Alloc: map[common.Address]core.GenesisAccount{
-			addr: {Balance: big.NewInt(10000000000000000)},
+func TestExtraData(t *testing.T) {
+	for _, test := range []extraDataTest{
+		{
+			name:          "normal-voter-vote",
+			data:          []byte("vanity string!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01#Eg\x89\xff"),
+			vanity:        "vanity string!",
+			candidate:     common.HexToAddress("0x123456789"),
+			voterElection: true,
 		},
-		BaseFee: big.NewInt(params.InitialBaseFee),
-	}
-	copy(genspec.ExtraData[extraVanity:], addr[:])
-	genesis := genspec.MustCommit(db)
-
-	// Generate a batch of blocks, each properly signed
-	chain, _ := core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
-	defer chain.Stop()
-
-	blocks, _ := core.GenerateChain(params.AllCliqueProtocolChanges, genesis, engine, db, 3, func(i int, block *core.BlockGen) {
-		// The chain maker doesn't have access to a chain, so the difficulty will be
-		// lets unset (nil). Set it here to the correct value.
-		block.SetDifficulty(diffInTurn)
-
-		// We want to simulate an empty middle block, having the same state as the
-		// first one. The last is needs a state change again to force a reorg.
-		if i != 1 {
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr), common.Address{0x00}, new(big.Int), params.TxGas, block.BaseFee(), nil), signer, key)
-			if err != nil {
-				panic(err)
-			}
-			block.AddTxWithChain(chain, tx)
-		}
-	})
-	for i, block := range blocks {
-		header := block.Header()
-		if i > 0 {
-			header.ParentHash = blocks[i-1].Hash()
-		}
-		header.Extra = make([]byte, extraVanity+extraSeal)
-		header.Difficulty = diffInTurn
-
-		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
-		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
-		blocks[i] = block.WithSeal(header)
-	}
-	// Insert the first two blocks and make sure the chain is valid
-	db = rawdb.NewMemoryDatabase()
-	genspec.MustCommit(db)
-
-	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
-	defer chain.Stop()
-
-	if _, err := chain.InsertChain(blocks[:2]); err != nil {
-		t.Fatalf("failed to insert initial blocks: %v", err)
-	}
-	if head := chain.CurrentBlock().NumberU64(); head != 2 {
-		t.Fatalf("chain head mismatch: have %d, want %d", head, 2)
-	}
-
-	// Simulate a crash by creating a new chain on top of the database, without
-	// flushing the dirty states out. Insert the last block, triggering a sidechain
-	// reimport.
-	chain, _ = core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
-	defer chain.Stop()
-
-	if _, err := chain.InsertChain(blocks[2:]); err != nil {
-		t.Fatalf("failed to insert final block: %v", err)
-	}
-	if head := chain.CurrentBlock().NumberU64(); head != 3 {
-		t.Fatalf("chain head mismatch: have %d, want %d", head, 3)
+		{
+			name:          "normal-signer-vote",
+			data:          []byte("test\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01#Eg\x89\x00"),
+			vanity:        "test",
+			candidate:     common.HexToAddress("0x123456789"),
+			voterElection: false,
+		},
+		{
+			name:   "spaces-no-vote",
+			data:   []byte("  spaces   \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
+			vanity: "  spaces   ",
+		},
+	} {
+		t.Run(test.name, test.run)
 	}
 }
 
-func TestSealHash(t *testing.T) {
-	have := SealHash(&types.Header{
-		Difficulty: new(big.Int),
-		Number:     new(big.Int),
-		Extra:      make([]byte, 32+65),
-		BaseFee:    new(big.Int),
+type extraDataTest struct {
+	name          string
+	data          []byte
+	vanity        string
+	candidate     common.Address
+	voterElection bool
+}
+
+func (test *extraDataTest) run(t *testing.T) {
+	if vanity := string(bytes.TrimRight(ExtraVanity(test.data), "\x00")); vanity != test.vanity {
+		t.Errorf("expected vanity %q but got %q", test.vanity, vanity)
+	}
+	if ExtraHasVote(test.data) {
+		if test.candidate == (common.Address{}) {
+			t.Errorf("unexpected vote: %s voter election: %t", ExtraCandidate(test.data), ExtraIsVoterElection(test.data))
+		} else {
+			candidate, isVoter := ExtraCandidate(test.data), ExtraIsVoterElection(test.data)
+			if candidate != test.candidate {
+				t.Errorf("expected candidate %s but got %s", test.candidate.Hex(), candidate.Hex())
+			}
+			if isVoter != test.voterElection {
+				t.Errorf("expected voterElections %t but got %t", test.voterElection, isVoter)
+			}
+		}
+	} else {
+		if test.candidate != (common.Address{}) {
+			t.Errorf("expected vote but got none: %s voter election: %t", test.candidate.Hex(), test.voterElection)
+		}
+	}
+
+	var extra []byte
+	extra = append(extra, test.vanity...)
+	extra = ExtraEnsureVanity(extra)
+	if test.candidate != (common.Address{}) {
+		extra = ExtraAppendVote(extra, test.candidate, test.voterElection)
+	}
+	if !bytes.Equal(test.data, extra) {
+		t.Errorf("expected:\n\t%q\ngot:\n\t%q", test.data, extra)
+	}
+}
+
+func TestCalcDifficulty(t *testing.T) {
+	addrs := []common.Address{
+		common.StringToAddress("0abcdefghijklmnopqrs"),
+		common.StringToAddress("1abcdefghijklmnopqrs"),
+		common.StringToAddress("2abcdefghijklmnopqrs"),
+		common.StringToAddress("3abcdefghijklmnopqrs"),
+		common.StringToAddress("4abcdefghijklmnopqrs"),
+		common.StringToAddress("5abcdefghijklmnopqrs"),
+	}
+	for _, test := range []testCalcDifficulty{
+		// Genesis.
+		{
+			name: "3/genesis",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 0,
+				addrs[1]: 0,
+				addrs[2]: 0,
+			},
+		},
+		{
+			name: "6/genesis",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 0,
+				addrs[1]: 0,
+				addrs[2]: 0,
+				addrs[3]: 0,
+				addrs[4]: 0,
+				addrs[5]: 0,
+			},
+		},
+
+		// All signed.
+		{
+			name: "3/all-signed/in-turn",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 1,
+				addrs[1]: 2,
+				addrs[2]: 3,
+			},
+		},
+		{
+			name: "3/all-signed/out-of-turn",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 1,
+				addrs[1]: 4,
+				addrs[2]: 3,
+			},
+		},
+		{
+			name: "6/all-signed/in-turn",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 1,
+				addrs[1]: 2,
+				addrs[2]: 3,
+				addrs[3]: 4,
+				addrs[4]: 5,
+				addrs[5]: 6,
+			},
+		},
+		{
+			name: "6/all-signed/out-of-turn",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 9,
+				addrs[1]: 2,
+				addrs[2]: 7,
+				addrs[3]: 8,
+				addrs[4]: 5,
+				addrs[5]: 6,
+			},
+		},
+
+		// One new.
+		{
+			name: "3/one-new",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 0,
+				addrs[1]: 4,
+				addrs[2]: 3,
+			},
+		},
+		{
+			name: "6/one-new",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 1,
+				addrs[1]: 2,
+				addrs[2]: 3,
+				addrs[3]: 4,
+				addrs[4]: 5,
+				addrs[5]: 0,
+			},
+		},
+
+		// Multiple new.
+		{
+			name: "3/multiple-new",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 0,
+				addrs[1]: 0,
+				addrs[2]: 3,
+			},
+		},
+		{
+			name: "6/multiple-new",
+			lastSigned: map[common.Address]uint64{
+				addrs[0]: 0,
+				addrs[1]: 0,
+				addrs[2]: 3,
+				addrs[3]: 0,
+				addrs[4]: 0,
+				addrs[5]: 0,
+			},
+		},
+	} {
+		t.Run(test.name, test.run)
+	}
+}
+
+type testCalcDifficulty struct {
+	name       string
+	lastSigned map[common.Address]uint64
+}
+
+func (test *testCalcDifficulty) run(t *testing.T) {
+	var signers []common.Address
+	for addr := range test.lastSigned {
+		signers = append(signers, addr)
+	}
+	sort.Slice(signers, func(i, j int) bool {
+		iAddr, jAddr := signers[i], signers[j]
+		iN, jN := test.lastSigned[iAddr], test.lastSigned[jAddr]
+		if iN != jN {
+			return iN < jN
+		}
+		return bytes.Compare(iAddr[:], jAddr[:]) < 0
 	})
-	want := common.HexToHash("0xbd3d1fa43fbc4c5bfcc91b179ec92e2861df3654de60468beb908ff805359e8f")
-	if have != want {
-		t.Errorf("have %x, want %x", have, want)
+	for i, signer := range signers {
+		exp := len(signers) - i
+		if exp <= len(signers)/2 {
+			exp = 0
+		}
+		got := CalcDifficulty(test.lastSigned, signer)
+		if got != uint64(exp) {
+			t.Errorf("expected difficulty %d but got %d", exp, got)
+		}
 	}
 }

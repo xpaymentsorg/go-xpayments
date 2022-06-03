@@ -15,9 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package bind generates Ethereum contract Go bindings.
-//
-// Detailed usage document and tutorial available on the go-ethereum Wiki page:
-// https://github.com/xpaymentsorg/go-xpayments/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
+
 package bind
 
 import (
@@ -88,13 +86,6 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			transactIdentifiers = make(map[string]bool)
 			eventIdentifiers    = make(map[string]bool)
 		)
-
-		for _, input := range evmABI.Constructor.Inputs {
-			if hasStruct(input.Type) {
-				bindStructType[lang](input.Type, structs)
-			}
-		}
-
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
@@ -179,7 +170,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
-			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
+			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
 			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,

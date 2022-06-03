@@ -14,17 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package geth
+package gpay
 
 import (
+	"io"
+	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/cespare/cp"
 )
 
 // androidTestClass is a Java class to do some lightweight tests against the Android
@@ -46,7 +47,7 @@ public class AndroidTest extends InstrumentationTestCase {
 
 	public void testAccountManagement() {
 		// Create an encrypted keystore with light crypto parameters.
-		KeyStore ks = new KeyStore(getInstrumentation().getContext().getFilesDir() + "/keystore", Geth.LightScryptN, Geth.LightScryptP);
+		KeyStore ks = new KeyStore(getInstrumentation().getContext().getFilesDir() + "/keystore", xPayments.LightScryptN, xPayments.LightScryptP);
 
 		try {
 			// Create a new account with the specified encryption passphrase.
@@ -95,7 +96,7 @@ public class AndroidTest extends InstrumentationTestCase {
 
 		try {
 			// Start up a new inprocess node
-			Node node = new Node(getInstrumentation().getContext().getFilesDir() + "/.ethereum", new NodeConfig());
+			Node node = new Node(getInstrumentation().getContext().getFilesDir() + "/.xpayments", new NodeConfig());
 			node.start();
 
 			// Retrieve some data via function calls (we don't really care about the results)
@@ -105,7 +106,7 @@ public class AndroidTest extends InstrumentationTestCase {
 			info.getProtocols();
 
 			// Retrieve some data via the APIs (we don't really care about the results)
-			EthereumClient ec = node.getEthereumClient();
+			GoClient ec = node.getGoClient();
 			ec.getBlockByNumber(ctx, -1).getNumber();
 
 			NewHeadHandler handler = new NewHeadHandler() {
@@ -183,7 +184,11 @@ func TestAndroid(t *testing.T) {
 		t.Logf("initialization took %v", time.Since(start))
 	}
 	// Create and switch to a temporary workspace
-	workspace := t.TempDir()
+	workspace, err := ioutil.TempDir("", "geth-android-")
+	if err != nil {
+		t.Fatalf("failed to create temporary workspace: %v", err)
+	}
+	defer os.RemoveAll(workspace)
 
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -201,27 +206,48 @@ func TestAndroid(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Generate the mobile bindings for Geth and add the tester class
-	gobind := exec.Command("gomobile", "bind", "-javapkg", "org.ethereum", "github.com/xpaymentsorg/go-xpayments/mobile")
+	// Generate the mobile bindings for xPayments and add the tester class
+	gobind := exec.Command("gomobile", "bind", "-javapkg", "io.xpayments", "github.com/xpaymentsorg/go-xpayments/mobile")
 	if output, err := gobind.CombinedOutput(); err != nil {
 		t.Logf("%s", output)
 		t.Fatalf("failed to run gomobile bind: %v", err)
 	}
-	cp.CopyFile(filepath.Join("libs", "geth.aar"), "geth.aar")
+	copyFile(filepath.Join("libs", "geth.aar"), "geth.aar", os.ModePerm)
 
-	if err = os.WriteFile(filepath.Join("src", "androidTest", "java", "org", "ethereum", "gethtest", "AndroidTest.java"), []byte(androidTestClass), os.ModePerm); err != nil {
+	if err = ioutil.WriteFile(filepath.Join("src", "androidTest", "java", "io", "xpayments", "gethtest", "AndroidTest.java"), []byte(androidTestClass), os.ModePerm); err != nil {
 		t.Fatalf("failed to write Android test class: %v", err)
 	}
 	// Finish creating the project and run the tests via gradle
-	if err = os.WriteFile(filepath.Join("src", "main", "AndroidManifest.xml"), []byte(androidManifest), os.ModePerm); err != nil {
+	if err = ioutil.WriteFile(filepath.Join("src", "main", "AndroidManifest.xml"), []byte(androidManifest), os.ModePerm); err != nil {
 		t.Fatalf("failed to write Android manifest: %v", err)
 	}
-	if err = os.WriteFile("build.gradle", []byte(gradleConfig), os.ModePerm); err != nil {
+	if err = ioutil.WriteFile("build.gradle", []byte(gradleConfig), os.ModePerm); err != nil {
 		t.Fatalf("failed to write gradle build file: %v", err)
 	}
 	if output, err := exec.Command("gradle", "connectedAndroidTest").CombinedOutput(); err != nil {
 		t.Logf("%s", output)
 		t.Errorf("failed to run gradle test: %v", err)
+	}
+}
+
+func copyFile(dst, src string, mode os.FileMode) {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		log.Fatal(err)
+	}
+	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer destFile.Close()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer srcFile.Close()
+
+	if _, err := io.Copy(destFile, srcFile); err != nil {
+		log.Fatal(err)
 	}
 }
 

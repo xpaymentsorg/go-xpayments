@@ -20,19 +20,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/internal/jsre"
-	"github.com/xpaymentsorg/go-xpayments/miner"
 	"github.com/xpaymentsorg/go-xpayments/node"
 )
 
@@ -77,7 +75,7 @@ func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
 type tester struct {
 	workspace string
 	stack     *node.Node
-	ethereum  *eth.Ethereum
+	ethereum  *eth.XPS
 	console   *Console
 	input     *hookedPrompter
 	output    *bytes.Buffer
@@ -85,30 +83,27 @@ type tester struct {
 
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
-func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
+func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
-	workspace := t.TempDir()
+	workspace, err := ioutil.TempDir("", "console-tester-")
+	if err != nil {
+		t.Fatalf("failed to create temporary keystore: %v", err)
+	}
 
-	// Create a networkless protocol stack and start an Ethereum service within
+	// Create a networkless protocol stack and start an xPayments service within
 	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: testInstance})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
-	ethConf := &ethconfig.Config{
-		Genesis: core.DeveloperGenesisBlock(15, 11_500_000, common.Address{}),
-		Miner: miner.Config{
-			Etherbase: common.HexToAddress(testAddress),
-		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
-		},
+	ethConf := &eth.Config{
+		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
+		Etherbase: common.HexToAddress(testAddress),
 	}
 	if confOverride != nil {
 		confOverride(ethConf)
 	}
-	ethBackend, err := eth.New(stack, ethConf)
-	if err != nil {
-		t.Fatalf("failed to register Ethereum protocol: %v", err)
+	if err = stack.Register(func(sctx *node.ServiceContext) (node.Service, error) { return eth.New(sctx, ethConf) }); err != nil {
+		t.Fatalf("failed to register xPayments protocol: %v", err)
 	}
 	// Start the node and assemble the JavaScript console around it
 	if err = stack.Start(); err != nil {
@@ -133,10 +128,13 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		t.Fatalf("failed to create JavaScript console: %v", err)
 	}
 	// Create the final tester and return
+	var ethereum *eth.XPS
+	stack.Service(&ethereum)
+
 	return &tester{
 		workspace: workspace,
 		stack:     stack,
-		ethereum:  ethBackend,
+		ethereum:  ethereum,
 		console:   console,
 		input:     prompter,
 		output:    printer,
@@ -148,8 +146,8 @@ func (env *tester) Close(t *testing.T) {
 	if err := env.console.Stop(false); err != nil {
 		t.Errorf("failed to stop embedded console: %v", err)
 	}
-	if err := env.stack.Close(); err != nil {
-		t.Errorf("failed to tear down embedded node: %v", err)
+	if err := env.stack.Stop(); err != nil {
+		t.Errorf("failed to stop embedded node: %v", err)
 	}
 	os.RemoveAll(env.workspace)
 }
@@ -285,7 +283,7 @@ func TestPrettyError(t *testing.T) {
 	defer tester.Close(t)
 	tester.console.Evaluate("throw 'hello'")
 
-	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:1(1)\n\n"
+	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:7(1)\n\n"
 	if output := tester.output.String(); output != want {
 		t.Fatalf("pretty error mismatch: have %s, want %s", output, want)
 	}

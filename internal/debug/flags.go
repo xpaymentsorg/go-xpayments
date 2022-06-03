@@ -26,11 +26,11 @@ import (
 
 	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
+	"github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/log/term"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/metrics/exp"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var Memsize memsizeui.Handler
@@ -46,17 +46,13 @@ var (
 		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
 		Value: "",
 	}
-	logjsonFlag = cli.BoolFlag{
-		Name:  "log.json",
-		Usage: "Format logs with JSON",
-	}
 	backtraceAtFlag = cli.StringFlag{
-		Name:  "log.backtrace",
+		Name:  "backtrace",
 		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
 		Value: "",
 	}
 	debugFlag = cli.BoolFlag{
-		Name:  "log.debug",
+		Name:  "debug",
 		Usage: "Prepends log messages with call-site location (file and line number)",
 	}
 	pprofFlag = cli.BoolFlag{
@@ -64,106 +60,83 @@ var (
 		Usage: "Enable the pprof HTTP server",
 	}
 	pprofPortFlag = cli.IntFlag{
-		Name:  "pprof.port",
+		Name:  "pprofport",
 		Usage: "pprof HTTP server listening port",
 		Value: 6060,
 	}
 	pprofAddrFlag = cli.StringFlag{
-		Name:  "pprof.addr",
+		Name:  "pprofaddr",
 		Usage: "pprof HTTP server listening interface",
 		Value: "127.0.0.1",
 	}
 	memprofilerateFlag = cli.IntFlag{
-		Name:  "pprof.memprofilerate",
+		Name:  "memprofilerate",
 		Usage: "Turn on memory profiling with the given rate",
 		Value: runtime.MemProfileRate,
 	}
 	blockprofilerateFlag = cli.IntFlag{
-		Name:  "pprof.blockprofilerate",
+		Name:  "blockprofilerate",
 		Usage: "Turn on block profiling with the given rate",
 	}
+	mutexProfileFractionFlag = cli.IntFlag{
+		Name:  "mutexprofilefraction",
+		Usage: "Turn on mutex profiling with the given fraction",
+	}
 	cpuprofileFlag = cli.StringFlag{
-		Name:  "pprof.cpuprofile",
+		Name:  "cpuprofile",
 		Usage: "Write CPU profile to the given file",
 	}
 	traceFlag = cli.StringFlag{
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
+	stackdriverLogging = cli.BoolFlag{
+		Name:  "logging.stackdriver",
+		Usage: "Use stackdriver log format (JSON with specific key names).",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag,
-	vmoduleFlag,
-	logjsonFlag,
-	backtraceAtFlag,
-	debugFlag,
-	pprofFlag,
-	pprofAddrFlag,
-	pprofPortFlag,
-	memprofilerateFlag,
-	blockprofilerateFlag,
-	cpuprofileFlag,
-	traceFlag,
+	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
+	pprofFlag, pprofAddrFlag, pprofPortFlag,
+	memprofilerateFlag, cpuprofileFlag, traceFlag,
+	blockprofilerateFlag, mutexProfileFractionFlag,
+	stackdriverLogging,
 }
 
 var glogger *log.GlogHandler
 
 func init() {
-	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.LvlInfo)
-	log.Root().SetHandler(glogger)
+	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
+	output := io.Writer(os.Stderr)
+	if usecolor {
+		output = colorable.NewColorableStderr()
+	}
+	glogger = log.NewGlogHandler(log.StreamHandler(output, log.TerminalFormat(usecolor)))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
-	var ostream log.Handler
-	output := io.Writer(os.Stderr)
-	if ctx.GlobalBool(logjsonFlag.Name) {
-		ostream = log.StreamHandler(output, log.JSONFormat())
-	} else {
-		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-		if usecolor {
-			output = colorable.NewColorableStderr()
-		}
-		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
-	}
-	glogger.SetHandler(ostream)
-
 	// logging
-	verbosity := ctx.GlobalInt(verbosityFlag.Name)
-	glogger.Verbosity(log.Lvl(verbosity))
-	vmodule := ctx.GlobalString(vmoduleFlag.Name)
-	glogger.Vmodule(vmodule)
-
-	debug := ctx.GlobalBool(debugFlag.Name)
-	if ctx.GlobalIsSet(debugFlag.Name) {
-		debug = ctx.GlobalBool(debugFlag.Name)
+	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
+	if ctx.GlobalBool(stackdriverLogging.Name) {
+		glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.StackdriverFormat()))
 	}
-	log.PrintOrigins(debug)
-
-	backtrace := ctx.GlobalString(backtraceAtFlag.Name)
-	glogger.BacktraceAt(backtrace)
-
+	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
+	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
+	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
 	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
-	runtime.MemProfileRate = memprofilerateFlag.Value
-	if ctx.GlobalIsSet(memprofilerateFlag.Name) {
-		runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
-	}
-
-	blockProfileRate := ctx.GlobalInt(blockprofilerateFlag.Name)
-	Handler.SetBlockProfileRate(blockProfileRate)
-
+	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
+	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
 	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
 		if err := Handler.StartGoTrace(traceFile); err != nil {
 			return err
 		}
 	}
-
 	if cpuFile := ctx.GlobalString(cpuprofileFlag.Name); cpuFile != "" {
 		if err := Handler.StartCPUProfile(cpuFile); err != nil {
 			return err
@@ -172,24 +145,19 @@ func Setup(ctx *cli.Context) error {
 
 	// pprof server
 	if ctx.GlobalBool(pprofFlag.Name) {
-		listenHost := ctx.GlobalString(pprofAddrFlag.Name)
+		runtime.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
+		runtime.SetMutexProfileFraction(ctx.GlobalInt(mutexProfileFractionFlag.Name))
 
-		port := ctx.GlobalInt(pprofPortFlag.Name)
-
-		address := fmt.Sprintf("%s:%d", listenHost, port)
-		// This context value ("metrics.addr") represents the utils.MetricsHTTPFlag.Name.
-		// It cannot be imported because it will cause a cyclical dependency.
-		StartPProf(address, !ctx.GlobalIsSet("metrics.addr"))
+		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
+		StartPProf(address)
 	}
 	return nil
 }
 
-func StartPProf(address string, withMetrics bool) {
+func StartPProf(address string) {
 	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
 	// from the registry into expvar, and execute regular expvar handler.
-	if withMetrics {
-		exp.Exp(metrics.DefaultRegistry)
-	}
+	exp.Exp(metrics.DefaultRegistry)
 	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {

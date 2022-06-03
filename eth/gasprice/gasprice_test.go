@@ -1,192 +1,328 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package gasprice
 
 import (
 	"context"
-	"math"
+	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
+	"math/rand"
+
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
-const testHead = 32
+func TestOracle_SuggestPrice(t *testing.T) {
+	for _, test := range []suggestPriceTest{
+		{
+			name: "default",
+			exp:  Default.Uint64(),
+			params: Config{
+				Blocks:     1,
+				Percentile: 60,
+			},
+			backend: newTestBackend(nil, block{
+				txs: []tx{{price: 1}},
+			}),
+		},
+		{
+			name: "single",
+			exp:  Default.Uint64(),
+			params: Config{
+				Blocks:     1,
+				Percentile: 60,
+			},
+			backend: newTestBackend(nil, block{
+				txs: []tx{
+					{price: 1000},
+				},
+			}),
+		},
+		{
+			name: "single full",
+			exp:  2000,
+			params: Config{
+				Blocks:     1,
+				Percentile: 60,
+				Default:    bigInt(1),
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs: []tx{
+					{price: 2000},
+				},
+			}),
+		},
+		{
+			name: "incomplete",
+			exp:  Default.Uint64(),
+			params: Config{
+				Blocks:     10,
+				Percentile: 60,
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs: []tx{
+					{price: Default.Uint64() * 10},
+				},
+			}),
+		},
+		{
+			name: "some full",
+			exp:  Default.Uint64(),
+			params: Config{
+				Blocks:     5,
+				Percentile: 60,
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs:  []tx{{price: 10}},
+			}, block{
+				txs: []tx{{price: 1}},
+			}, block{
+				txs: []tx{{price: 5}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 7}},
+			}, block{
+				txs: []tx{{price: 20}},
+			}),
+		},
+		{
+			name: "some full-100",
+			exp:  20,
+			params: Config{
+				Blocks:     5,
+				Percentile: 100,
+				Default:    bigInt(1),
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs:  []tx{{price: 10}},
+			}, block{
+				txs: []tx{{price: 1}},
+			}, block{
+				txs: []tx{{price: 5}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 7}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 20}},
+			}),
+		},
+		{
+			name: "all full",
+			exp:  7,
+			params: Config{
+				Blocks:     5,
+				Percentile: 50,
+				Default:    bigInt(1),
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs:  []tx{{price: 10}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 1}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 5}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 7}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 20}},
+			}),
+		},
+		{
+			name: "some empty",
+			exp:  5,
+			params: Config{
+				Blocks:     5,
+				Percentile: 60,
+				Default:    bigInt(1),
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs:  []tx{{price: 10}},
+			}, block{}, block{
+				full: true,
+				txs:  []tx{{price: 5}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 7}},
+			}, block{}),
+		},
+		{
+			name: "all empty",
+			exp:  Default.Uint64(),
+			params: Config{
+				Blocks:     5,
+				Percentile: 50,
+			},
+			backend: newTestBackend(nil, block{}, block{}, block{}, block{}, block{}),
+		},
+		{
+			name: "all full local",
+			exp:  1,
+			params: Config{
+				Blocks:     5,
+				Percentile: 50,
+				Default:    bigInt(1),
+			},
+			backend: newTestBackend(nil, block{
+				full: true,
+				txs:  []tx{{price: 10, local: true}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 50, local: true}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 5, local: true}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 7, local: true}},
+			}, block{
+				full: true,
+				txs:  []tx{{price: 20, local: true}},
+			}),
+		},
+		{
+			name: "darvaza-before",
+			exp:  Default.Uint64(),
+			params: Config{
+				Blocks:     5,
+				Percentile: 50,
+				Default:    nil,
+			},
+			backend: newTestBackend(&params.ChainConfig{
+				DarvazaBlock:      big.NewInt(140000),
+				DarvazaDefaultGas: new(big.Int).Mul(Default, bigInt(2))},
+				block{},
+			),
+		},
+		{
+			name: "darvaza-after",
+			exp:  2 * Default.Uint64(),
+			params: Config{
+				Blocks:     5,
+				Percentile: 50,
+				Default:    nil,
+			},
+			backend: newTestBackend(&params.ChainConfig{
+				DarvazaBlock:      big.NewInt(14),
+				DarvazaDefaultGas: new(big.Int).Mul(Default, bigInt(2))},
+				block{},
+				block{},
+			),
+		},
+	} {
+		t.Run(test.name, test.run)
+	}
+
+}
+
+type suggestPriceTest struct {
+	name    string
+	exp     uint64
+	params  Config
+	backend OracleBackend
+}
+
+func (test *suggestPriceTest) run(t *testing.T) {
+	o := NewOracle(test.backend, test.params)
+	got, err := o.SuggestPrice(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Uint64() != test.exp {
+		t.Errorf("expected %d but got %s", test.exp, got)
+	}
+}
 
 type testBackend struct {
-	chain   *core.BlockChain
-	pending bool // pending block available
+	config     *params.ChainConfig
+	lastHeader *types.Header
+	blocks     []*types.Block
 }
 
-func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
-	if number > testHead {
-		return nil, nil
+type block struct {
+	full bool
+	txs  []tx
+}
+
+type tx struct {
+	price uint64
+	local bool
+}
+
+func newTestBackend(config *params.ChainConfig, blockSpec ...block) OracleBackend {
+	tb := &testBackend{config: config}
+	if tb.config == nil {
+		tb.config = params.MainnetChainConfig
 	}
-	if number == rpc.LatestBlockNumber {
-		number = testHead
-	}
-	if number == rpc.PendingBlockNumber {
-		if b.pending {
-			number = testHead + 1
-		} else {
-			return nil, nil
+	number := rand.Intn(1000)
+	localKey, _ := crypto.GenerateKey()
+	localAddr := crypto.PubkeyToAddress(localKey.PublicKey)
+	otherKey, _ := crypto.GenerateKey()
+	for i, b := range blockSpec {
+		gasUsed := uint64(len(b.txs)) * params.TxGas
+		gasLimit := gasUsed
+		if !b.full {
+			gasLimit += params.TxGas * 5
 		}
-	}
-	return b.chain.GetHeaderByNumber(uint64(number)), nil
-}
-
-func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	if number > testHead {
-		return nil, nil
-	}
-	if number == rpc.LatestBlockNumber {
-		number = testHead
-	}
-	if number == rpc.PendingBlockNumber {
-		if b.pending {
-			number = testHead + 1
-		} else {
-			return nil, nil
+		header := &types.Header{
+			Number:   new(big.Int).SetUint64(uint64(number + i)),
+			GasUsed:  gasUsed,
+			GasLimit: gasLimit,
+			Coinbase: localAddr,
 		}
+		var txs []*types.Transaction
+		for _, tx := range b.txs {
+			key := otherKey
+			if tx.local {
+				key = localKey
+			}
+			txs = append(txs, transaction(0, tx.price, key))
+		}
+		tb.blocks = append(tb.blocks, types.NewBlock(header, txs, nil, nil))
 	}
-	return b.chain.GetBlockByNumber(uint64(number)), nil
+	if l := len(tb.blocks); l > 0 {
+		tb.lastHeader = tb.blocks[len(tb.blocks)-1].Header()
+	}
+	return tb
 }
 
-func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	return b.chain.GetReceiptsByHash(hash), nil
+func (b *testBackend) ChainConfig() *params.ChainConfig {
+	return b.config
 }
 
-func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	if b.pending {
-		block := b.chain.GetBlockByNumber(testHead + 1)
-		return block, b.chain.GetReceiptsByHash(block.Hash())
+func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
+	if blockNr == rpc.LatestBlockNumber {
+		return b.lastHeader, nil
 	}
 	return nil, nil
 }
 
-func (b *testBackend) ChainConfig() *params.ChainConfig {
-	return b.chain.Config()
-}
-
-func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return nil
-}
-
-func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
-	var (
-		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr   = crypto.PubkeyToAddress(key.PublicKey)
-		config = *params.TestChainConfig // needs copy because it is modified below
-		gspec  = &core.Genesis{
-			Config: &config,
-			Alloc:  core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
-		}
-		signer = types.LatestSigner(gspec.Config)
-	)
-	config.LondonBlock = londonBlock
-	config.ArrowGlacierBlock = londonBlock
-	engine := ethash.NewFaker()
-	db := rawdb.NewMemoryDatabase()
-	genesis, err := gspec.Commit(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Generate testing blocks
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
-		b.SetCoinbase(common.Address{1})
-
-		var txdata types.TxData
-		if londonBlock != nil && b.Number().Cmp(londonBlock) >= 0 {
-			txdata = &types.DynamicFeeTx{
-				ChainID:   gspec.Config.ChainID,
-				Nonce:     b.TxNonce(addr),
-				To:        &common.Address{},
-				Gas:       30000,
-				GasFeeCap: big.NewInt(100 * params.GWei),
-				GasTipCap: big.NewInt(int64(i+1) * params.GWei),
-				Data:      []byte{},
-			}
-		} else {
-			txdata = &types.LegacyTx{
-				Nonce:    b.TxNonce(addr),
-				To:       &common.Address{},
-				Gas:      21000,
-				GasPrice: big.NewInt(int64(i+1) * params.GWei),
-				Value:    big.NewInt(100),
-				Data:     []byte{},
-			}
-		}
-		b.AddTx(types.MustSignNewTx(key, signer, txdata))
-	})
-	// Construct testing chain
-	diskdb := rawdb.NewMemoryDatabase()
-	gspec.Commit(diskdb)
-	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec.Config, engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("Failed to create local chain, %v", err)
-	}
-	chain.InsertChain(blocks)
-	return &testBackend{chain: chain, pending: pending}
-}
-
-func (b *testBackend) CurrentHeader() *types.Header {
-	return b.chain.CurrentHeader()
-}
-
-func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {
-	return b.chain.GetBlockByNumber(number)
-}
-
-func TestSuggestTipCap(t *testing.T) {
-	config := Config{
-		Blocks:     3,
-		Percentile: 60,
-		Default:    big.NewInt(params.GWei),
-	}
-	var cases = []struct {
-		fork   *big.Int // London fork number
-		expect *big.Int // Expected gasprice suggestion
-	}{
-		{nil, big.NewInt(params.GWei * int64(30))},
-		{big.NewInt(0), big.NewInt(params.GWei * int64(30))},  // Fork point in genesis
-		{big.NewInt(1), big.NewInt(params.GWei * int64(30))},  // Fork point in first block
-		{big.NewInt(32), big.NewInt(params.GWei * int64(30))}, // Fork point in last block
-		{big.NewInt(33), big.NewInt(params.GWei * int64(30))}, // Fork point in the future
-	}
-	for _, c := range cases {
-		backend := newTestBackend(t, c.fork, false)
-		oracle := NewOracle(backend, config)
-
-		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G
-		got, err := oracle.SuggestTipCap(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to retrieve recommended gas price: %v", err)
-		}
-		if got.Cmp(c.expect) != 0 {
-			t.Fatalf("Gas price mismatch, want %d, got %d", c.expect, got)
+func (b *testBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
+	for _, block := range b.blocks {
+		if block.Number().Int64() == int64(blockNr) {
+			return block, nil
 		}
 	}
+	return nil, nil
+}
+
+func bigInt(i uint64) *big.Int {
+	return new(big.Int).SetUint64(i)
+}
+
+func transaction(nonce uint64, gasPrice uint64, key *ecdsa.PrivateKey) *types.Transaction {
+	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), 100, bigInt(gasPrice), nil), types.HomesteadSigner{}, key)
+	return tx
 }

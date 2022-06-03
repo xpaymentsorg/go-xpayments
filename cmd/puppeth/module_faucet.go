@@ -30,7 +30,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/log"
 )
 
-// faucetDockerfile is the Dockerfile required to build a faucet container to
+// faucetDockerfile is the Dockerfile required to build an faucet container to
 // grant crypto tokens based on GitHub authentications.
 var faucetDockerfile = `
 FROM ethereum/client-go:alltools-latest
@@ -42,11 +42,10 @@ ADD account.pass /account.pass
 EXPOSE 8080 30303 30303/udp
 
 ENTRYPOINT [ \
-	"faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}",     \
+	"faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--netstats", "{{.Netstats}}", "--ethport", "{{.EthPort}}",     \
 	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",             \
 	"--account.json", "/account.json", "--account.pass", "/account.pass"                                                                                                    \
 	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}{{if .NoAuth}}, "--noauth"{{end}}                          \
-	{{if .TwitterToken}}, "--twitter.token.v1", "{{.TwitterToken}}"{{end}}                                                                                                  \
 ]`
 
 // faucetComposefile is the docker-compose.yml file required to deploy and maintain
@@ -57,10 +56,8 @@ services:
   faucet:
     build: .
     image: {{.Network}}/faucet
-    container_name: {{.Network}}_faucet_1
     ports:
-      - "{{.EthPort}}:{{.EthPort}}"
-      - "{{.EthPort}}:{{.EthPort}}/udp"{{if not .VHost}}
+      - "{{.EthPort}}:{{.EthPort}}"{{if not .VHost}}
       - "{{.ApiPort}}:8080"{{end}}
     volumes:
       - {{.Datadir}}:/root/.faucet
@@ -72,7 +69,6 @@ services:
       - FAUCET_TIERS={{.FaucetTiers}}
       - CAPTCHA_TOKEN={{.CaptchaToken}}
       - CAPTCHA_SECRET={{.CaptchaSecret}}
-      - TWITTER_TOKEN={{.TwitterToken}}
       - NO_AUTH={{.NoAuth}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}
       - VIRTUAL_PORT=8080{{end}}
@@ -96,7 +92,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 	template.Must(template.New("").Parse(faucetDockerfile)).Execute(dockerfile, map[string]interface{}{
 		"NetworkID":     config.node.network,
 		"Bootnodes":     strings.Join(bootnodes, ","),
-		"Ethstats":      config.node.ethstats,
+		"Netstats":      config.node.netstats,
 		"EthPort":       config.node.port,
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
@@ -105,7 +101,6 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,
 		"NoAuth":        config.noauth,
-		"TwitterToken":  config.twitterToken,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -116,14 +111,13 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"VHost":         config.host,
 		"ApiPort":       config.port,
 		"EthPort":       config.node.port,
-		"EthName":       config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
+		"EthName":       config.node.netstats[:strings.Index(config.node.netstats, ":")],
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,
 		"NoAuth":        config.noauth,
-		"TwitterToken":  config.twitterToken,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
@@ -139,12 +133,12 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 
 	// Build and deploy the faucet service
 	if nocache {
-		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate --timeout 60", workdir, network, network))
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
 	}
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate --timeout 60", workdir, network))
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
-// faucetInfos is returned from a faucet status check to allow reporting various
+// faucetInfos is returned from an faucet status check to allow reporting various
 // configuration parameters.
 type faucetInfos struct {
 	node          *nodeInfos
@@ -156,7 +150,6 @@ type faucetInfos struct {
 	noauth        bool
 	captchaToken  string
 	captchaSecret string
-	twitterToken  string
 }
 
 // Report converts the typed struct into a plain string->string map, containing
@@ -170,8 +163,7 @@ func (info *faucetInfos) Report() map[string]string {
 		"Funding cooldown (base tier)": fmt.Sprintf("%d mins", info.minutes),
 		"Funding tiers":                strconv.Itoa(info.tiers),
 		"Captha protection":            fmt.Sprintf("%v", info.captchaToken != ""),
-		"Using Twitter API":            fmt.Sprintf("%v", info.twitterToken != ""),
-		"Ethstats username":            info.node.ethstats,
+		"Netstats username":            info.node.netstats,
 	}
 	if info.noauth {
 		report["Debug mode (no auth)"] = "enabled"
@@ -189,7 +181,7 @@ func (info *faucetInfos) Report() map[string]string {
 	return report
 }
 
-// checkFaucet does a health-check against a faucet server to verify whether
+// checkFaucet does a health-check against an faucet server to verify whether
 // it's running, and if yes, gathering a collection of useful infos about it.
 func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	// Inspect a possible faucet container on the host
@@ -219,7 +211,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	minutes, _ := strconv.Atoi(infos.envvars["FAUCET_MINUTES"])
 	tiers, _ := strconv.Atoi(infos.envvars["FAUCET_TIERS"])
 
-	// Retrieve the funding account information
+	// Retrieve the funding account informations
 	var out []byte
 	keyJSON, keyPass := "", ""
 	if out, err = client.Run(fmt.Sprintf("docker exec %s_faucet_1 cat /account.json", network)); err == nil {
@@ -237,7 +229,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 		node: &nodeInfos{
 			datadir:  infos.volumes["/root/.faucet"],
 			port:     infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
-			ethstats: infos.envvars["ETH_NAME"],
+			netstats: infos.envvars["ETH_NAME"],
 			keyJSON:  keyJSON,
 			keyPass:  keyPass,
 		},
@@ -249,6 +241,5 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 		captchaToken:  infos.envvars["CAPTCHA_TOKEN"],
 		captchaSecret: infos.envvars["CAPTCHA_SECRET"],
 		noauth:        infos.envvars["NO_AUTH"] == "true",
-		twitterToken:  infos.envvars["TWITTER_TOKEN"],
 	}, nil
 }

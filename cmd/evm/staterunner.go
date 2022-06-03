@@ -20,15 +20,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 
+	cli "github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/tests"
-
-	"gopkg.in/urfave/cli.v1"
 )
 
 var stateTestCommand = cli.Command{
@@ -58,29 +57,27 @@ func stateTestCmd(ctx *cli.Context) error {
 	log.Root().SetHandler(glogger)
 
 	// Configure the EVM logger
-	config := &logger.Config{
-		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
-		DisableStorage:   ctx.GlobalBool(DisableStorageFlag.Name),
-		EnableReturnData: !ctx.GlobalBool(DisableReturnDataFlag.Name),
+	config := &vm.LogConfig{
+		DisableMemory: ctx.GlobalBool(DisableMemoryFlag.Name),
+		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
 	}
 	var (
-		tracer   vm.EVMLogger
-		debugger *logger.StructLogger
+		tracer   vm.Tracer
+		debugger *vm.StructLogger
 	)
 	switch {
 	case ctx.GlobalBool(MachineFlag.Name):
-		tracer = logger.NewJSONLogger(config, os.Stderr)
+		tracer = vm.NewJSONLogger(config, os.Stderr)
 
 	case ctx.GlobalBool(DebugFlag.Name):
-		debugger = logger.NewStructLogger(config)
+		debugger = vm.NewStructLogger(config)
 		tracer = debugger
 
 	default:
-		debugger = logger.NewStructLogger(config)
+		debugger = vm.NewStructLogger(config)
 	}
 	// Load the test content from the input file
-	src, err := os.ReadFile(ctx.Args().First())
+	src, err := ioutil.ReadFile(ctx.Args().First())
 	if err != nil {
 		return err
 	}
@@ -98,16 +95,16 @@ func stateTestCmd(ctx *cli.Context) error {
 		for _, st := range test.Subtests() {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			_, s, err := test.Run(st, cfg, false)
+			state, err := test.Run(st, cfg)
 			// print state root for evmlab tracing
-			if ctx.GlobalBool(MachineFlag.Name) && s != nil {
-				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", s.IntermediateRoot(false))
+			if ctx.GlobalBool(MachineFlag.Name) && state != nil {
+				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
 			}
 			if err != nil {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
-				if ctx.GlobalBool(DumpFlag.Name) && s != nil {
-					dump := s.RawDump(nil)
+				if ctx.GlobalBool(DumpFlag.Name) && state != nil {
+					dump := state.RawDump()
 					result.State = &dump
 				}
 			}
@@ -118,7 +115,7 @@ func stateTestCmd(ctx *cli.Context) error {
 			if ctx.GlobalBool(DebugFlag.Name) {
 				if debugger != nil {
 					fmt.Fprintln(os.Stderr, "#### TRACE ####")
-					logger.WriteTrace(os.Stderr, debugger.StructLogs())
+					vm.WriteTrace(os.Stderr, debugger.StructLogs())
 				}
 			}
 		}

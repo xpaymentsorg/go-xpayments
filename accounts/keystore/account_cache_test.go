@@ -18,6 +18,7 @@ package keystore
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -54,6 +55,7 @@ func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
 	dir, ks := tmpKeyStore(t, false)
+	defer os.RemoveAll(dir)
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
@@ -94,7 +96,7 @@ func TestWatchNoDir(t *testing.T) {
 
 	// Create ks but not the directory that it watches.
 	rand.Seed(time.Now().UnixNano())
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watchnodir-test-%d-%d", os.Getpid(), rand.Int()))
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
 	list := ks.Accounts()
@@ -320,7 +322,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 
 	// Create a temporary kesytore to test with
 	rand.Seed(time.Now().UnixNano())
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-updatedkeyfilecontents-test-%d-%d", os.Getpid(), rand.Int()))
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
 	list := ks.Accounts()
@@ -379,11 +381,11 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	// needed so that modTime of `file` is different to its current value after os.WriteFile
+	// needed so that modTime of `file` is different to its current value after ioutil.WriteFile
 	time.Sleep(1000 * time.Millisecond)
 
 	// Now replace file contents with crap
-	if err := os.WriteFile(file, []byte("foo"), 0644); err != nil {
+	if err := ioutil.WriteFile(file, []byte("foo"), 0644); err != nil {
 		t.Fatal(err)
 		return
 	}
@@ -396,9 +398,9 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 
 // forceCopyFile is like cp.CopyFile, but doesn't complain if the destination exists.
 func forceCopyFile(dst, src string) error {
-	data, err := os.ReadFile(src)
+	data, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0644)
+	return ioutil.WriteFile(dst, data, 0644)
 }

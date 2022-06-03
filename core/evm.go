@@ -35,76 +35,70 @@ type ChainContext interface {
 	GetHeader(common.Hash, uint64) *types.Header
 }
 
-// NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
-	var (
-		beneficiary common.Address
-		baseFee     *big.Int
-		random      *common.Hash
-	)
-
+// NewEVMContext creates a new context for use in the EVM.
+func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author *common.Address) vm.Context {
 	// If we don't have an explicit author (i.e. not mining), extract from the header
+	var beneficiary common.Address
 	if author == nil {
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author
 	}
-	if header.BaseFee != nil {
-		baseFee = new(big.Int).Set(header.BaseFee)
+	return vm.Context{
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     GetHashFn(header, chain),
+		Origin:      msg.From(),
+		Coinbase:    beneficiary,
+		BlockNumber: header.Number,
+		Time:        header.Time,
+		Difficulty:  header.Difficulty,
+		GasLimit:    header.GasLimit,
+		GasPrice:    msg.GasPrice(),
 	}
-	if header.Difficulty.Cmp(common.Big0) == 0 {
-		random = &header.MixDigest
+}
+
+// NewEVMContextLite is like NewEVMContext, but leaves the Origin and GasPrice to be set later.
+func NewEVMContextLite(header *types.Header, chain ChainContext, author *common.Address) vm.Context {
+	// If we don't have an explicit author (i.e. not mining), extract from the header
+	var beneficiary common.Address
+	if author == nil {
+		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+	} else {
+		beneficiary = *author
 	}
-	return vm.BlockContext{
+	return vm.Context{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
+		BlockNumber: header.Number,
+		Time:        header.Time,
+		Difficulty:  header.Difficulty,
 		GasLimit:    header.GasLimit,
-		Random:      random,
-	}
-}
-
-// NewEVMTxContext creates a new transaction context for a single transaction.
-func NewEVMTxContext(msg Message) vm.TxContext {
-	return vm.TxContext{
-		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
 	}
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
-	// Cache will initially contain [refHash.parent],
-	// Then fill up with [refHash.p, refHash.pp, refHash.ppp, ...]
-	var cache []common.Hash
+	var cache map[uint64]common.Hash
 
 	return func(n uint64) common.Hash {
 		// If there's no hash cache yet, make one
-		if len(cache) == 0 {
-			cache = append(cache, ref.ParentHash)
-		}
-		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
-			return cache[idx]
-		}
-		// No luck in the cache, but we can start iterating from the last element we already know
-		lastKnownHash := cache[len(cache)-1]
-		lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
-
-		for {
-			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
-			if header == nil {
-				break
+		if cache == nil {
+			cache = map[uint64]common.Hash{
+				ref.Number.Uint64() - 1: ref.ParentHash,
 			}
-			cache = append(cache, header.ParentHash)
-			lastKnownHash = header.ParentHash
-			lastKnownNumber = header.Number.Uint64() - 1
-			if n == lastKnownNumber {
-				return lastKnownHash
+		}
+		// Try to fulfill the request from the cache
+		if hash, ok := cache[n]; ok {
+			return hash
+		}
+		// Not cached, iterate the blocks and cache the hashes
+		for header := chain.GetHeader(ref.ParentHash, ref.Number.Uint64()-1); header != nil; header = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
+			cache[header.Number.Uint64()-1] = header.ParentHash
+			if n == header.Number.Uint64()-1 {
+				return header.ParentHash
 			}
 		}
 		return common.Hash{}

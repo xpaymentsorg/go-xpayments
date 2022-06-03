@@ -17,6 +17,7 @@
 package filters
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -62,22 +63,21 @@ func BenchmarkBloomBits32k(b *testing.B) {
 const benchFilterCnt = 2000
 
 func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
-	b.Skip("test disabled: this tests presume (and modify) an existing datadir.")
 	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
-	b.Log("Running bloombits benchmark   section size:", sectionSize)
+	fmt.Println("Running bloombits benchmark   section size:", sectionSize)
 
-	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
-	if err != nil {
+	db := ethdb.NewDB(benchDataDir)
+	if err := db.Open(); err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
-	head := rawdb.ReadHeadBlockHash(db)
+	head := rawdb.ReadHeadBlockHash(db.GlobalTable())
 	if head == (common.Hash{}) {
 		b.Fatalf("chain data not found at %v", benchDataDir)
 	}
 
 	clearBloomBits(db)
-	b.Log("Generating bloombits data...")
-	headNum := rawdb.ReadHeaderNumber(db, head)
+	fmt.Println("Generating bloombits data...")
+	headNum := rawdb.ReadHeaderNumber(db.GlobalTable(), head)
 	if headNum == nil || *headNum < sectionSize+512 {
 		b.Fatalf("not enough blocks for running a benchmark")
 	}
@@ -93,7 +93,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		var header *types.Header
 		for i := sectionIdx * sectionSize; i < (sectionIdx+1)*sectionSize; i++ {
 			hash := rawdb.ReadCanonicalHash(db, i)
-			header = rawdb.ReadHeader(db, hash, i)
+			header = rawdb.ReadHeader(db.HeaderTable(), hash, i)
 			if header == nil {
 				b.Fatalf("Error creating bloomBits data")
 			}
@@ -108,26 +108,29 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 			comp := bitutil.CompressBytes(data)
 			dataSize += uint64(len(data))
 			compSize += uint64(len(comp))
-			rawdb.WriteBloomBits(db, uint(i), sectionIdx, sectionHead, comp)
+			rawdb.WriteBloomBits(db.GlobalTable(), uint(i), sectionIdx, sectionHead, comp)
 		}
 		//if sectionIdx%50 == 0 {
-		//	b.Log(" section", sectionIdx, "/", cnt)
+		//	fmt.Println(" section", sectionIdx, "/", cnt)
 		//}
 	}
 
 	d := time.Since(start)
-	b.Log("Finished generating bloombits data")
-	b.Log(" ", d, "total  ", d/time.Duration(cnt*sectionSize), "per block")
-	b.Log(" data size:", dataSize, "  compressed size:", compSize, "  compression ratio:", float64(compSize)/float64(dataSize))
+	fmt.Println("Finished generating bloombits data")
+	fmt.Println(" ", d, "total  ", d/time.Duration(cnt*sectionSize), "per block")
+	fmt.Println(" data size:", dataSize, "  compressed size:", compSize, "  compression ratio:", float64(compSize)/float64(dataSize))
 
-	b.Log("Running filter benchmarks...")
+	fmt.Println("Running filter benchmarks...")
 	start = time.Now()
 	var backend *testBackend
 
 	for i := 0; i < benchFilterCnt; i++ {
 		if i%20 == 0 {
 			db.Close()
-			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
+			db := ethdb.NewDB(benchDataDir)
+			if err := db.Open(); err != nil {
+				b.Fatal(err)
+			}
 			backend = &testBackend{db: db, sections: cnt}
 		}
 		var addr common.Address
@@ -139,45 +142,61 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		}
 	}
 	d = time.Since(start)
-	b.Log("Finished running filter benchmarks")
-	b.Log(" ", d, "total  ", d/time.Duration(benchFilterCnt), "per address", d*time.Duration(1000000)/time.Duration(benchFilterCnt*cnt*sectionSize), "per million blocks")
+	fmt.Println("Finished running filter benchmarks")
+	fmt.Println(" ", d, "total  ", d/time.Duration(benchFilterCnt), "per address", d*time.Duration(1000000)/time.Duration(benchFilterCnt*cnt*sectionSize), "per million blocks")
 	db.Close()
 }
 
-var bloomBitsPrefix = []byte("bloomBits-")
-
-func clearBloomBits(db ethdb.Database) {
-	fmt.Println("Clearing bloombits data...")
-	it := db.NewIterator(bloomBitsPrefix, nil)
-	for it.Next() {
-		db.Delete(it.Key())
+func forEachKey(db common.Database, startPrefix, endPrefix []byte, fn func(key []byte)) {
+	tbl := db.GlobalTable().(*ethdb.Table)
+	it := tbl.ActiveSegment().(*ethdb.LDBSegment).LDB().NewIterator(nil, nil)
+	it.Seek(startPrefix)
+	for it.Valid() {
+		key := it.Key()
+		cmpLen := len(key)
+		if len(endPrefix) < cmpLen {
+			cmpLen = len(endPrefix)
+		}
+		if bytes.Compare(key[:cmpLen], endPrefix) == 1 {
+			break
+		}
+		fn(common.CopyBytes(key))
+		it.Next()
 	}
 	it.Release()
 }
 
+var bloomBitsPrefix = []byte("bloomBits-")
+
+func clearBloomBits(db common.Database) {
+	fmt.Println("Clearing bloombits data...")
+	forEachKey(db, bloomBitsPrefix, bloomBitsPrefix, func(key []byte) {
+		db.GlobalTable().Delete(key)
+	})
+}
+
 func BenchmarkNoBloomBits(b *testing.B) {
-	b.Skip("test disabled: this tests presume (and modify) an existing datadir.")
 	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
-	b.Log("Running benchmark without bloombits")
-	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
-	if err != nil {
+	fmt.Println("Running benchmark without bloombits")
+	db := ethdb.NewDB(benchDataDir)
+	if err := db.Open(); err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
-	head := rawdb.ReadHeadBlockHash(db)
+	head := rawdb.ReadHeadBlockHash(db.GlobalTable())
 	if head == (common.Hash{}) {
 		b.Fatalf("chain data not found at %v", benchDataDir)
 	}
-	headNum := rawdb.ReadHeaderNumber(db, head)
+	headNum := rawdb.ReadHeaderNumber(db.GlobalTable(), head)
 
 	clearBloomBits(db)
 
-	b.Log("Running filter benchmarks...")
+	fmt.Println("Running filter benchmarks...")
 	start := time.Now()
 	backend := &testBackend{db: db}
 	filter := NewRangeFilter(backend, 0, int64(*headNum), []common.Address{{}}, nil)
 	filter.Logs(context.Background())
 	d := time.Since(start)
-	b.Log("Finished running filter benchmarks")
-	b.Log(" ", d, "total  ", d*time.Duration(1000000)/time.Duration(*headNum+1), "per million blocks")
+	fmt.Println("Finished running filter benchmarks")
+	fmt.Println(" ", d, "total  ", d*time.Duration(1000000)/time.Duration(*headNum+1), "per million blocks")
 	db.Close()
 }

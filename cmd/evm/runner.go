@@ -20,26 +20,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"math/big"
 	"os"
 	goruntime "runtime"
 	"runtime/pprof"
-	"testing"
 	"time"
 
+	cli "github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/cmd/evm/internal/compiler"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/core/vm/runtime"
-	"github.com/xpaymentsorg/go-xpayments/eth/tracers/logger"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var runCommand = cli.Command{
@@ -71,77 +69,42 @@ func readGenesis(genesisPath string) *core.Genesis {
 	return genesis
 }
 
-type execStats struct {
-	time           time.Duration // The execution time.
-	allocs         int64         // The number of heap allocations during execution.
-	bytesAllocated int64         // The cumulative number of bytes allocated during execution.
-}
-
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, gasLeft uint64, stats execStats, err error) {
-	if bench {
-		result := testing.Benchmark(func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				output, gasLeft, err = execFunc()
-			}
-		})
-
-		// Get the average execution time from the benchmarking result.
-		// There are other useful stats here that could be reported.
-		stats.time = time.Duration(result.NsPerOp())
-		stats.allocs = result.AllocsPerOp()
-		stats.bytesAllocated = result.AllocedBytesPerOp()
-	} else {
-		var memStatsBefore, memStatsAfter goruntime.MemStats
-		goruntime.ReadMemStats(&memStatsBefore)
-		startTime := time.Now()
-		output, gasLeft, err = execFunc()
-		stats.time = time.Since(startTime)
-		goruntime.ReadMemStats(&memStatsAfter)
-		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
-		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
-	}
-
-	return output, gasLeft, stats, err
-}
-
 func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
-	logconfig := &logger.Config{
-		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
-		DisableStorage:   ctx.GlobalBool(DisableStorageFlag.Name),
-		EnableReturnData: !ctx.GlobalBool(DisableReturnDataFlag.Name),
-		Debug:            ctx.GlobalBool(DebugFlag.Name),
+	logconfig := &vm.LogConfig{
+		DisableMemory: ctx.GlobalBool(DisableMemoryFlag.Name),
+		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
+		Debug:         ctx.GlobalBool(DebugFlag.Name),
 	}
 
 	var (
-		tracer        vm.EVMLogger
-		debugLogger   *logger.StructLogger
+		tracer        vm.Tracer
+		debugLogger   *vm.StructLogger
 		statedb       *state.StateDB
 		chainConfig   *params.ChainConfig
-		sender        = common.BytesToAddress([]byte("sender"))
-		receiver      = common.BytesToAddress([]byte("receiver"))
+		sender        = common.StringToAddress("sender")
+		receiver      = common.StringToAddress("receiver")
 		genesisConfig *core.Genesis
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
+		tracer = vm.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
-		debugLogger = logger.NewStructLogger(logconfig)
+		debugLogger = vm.NewStructLogger(logconfig)
 		tracer = debugLogger
 	} else {
-		debugLogger = logger.NewStructLogger(logconfig)
+		debugLogger = vm.NewStructLogger(logconfig)
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
 		genesisConfig = gen
-		db := rawdb.NewMemoryDatabase()
+		db := ethdb.NewMemDatabase()
 		genesis := gen.ToBlock(db)
-		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db), nil)
+		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
 	} else {
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
@@ -153,41 +116,36 @@ func runCmd(ctx *cli.Context) error {
 		receiver = common.HexToAddress(ctx.GlobalString(ReceiverFlag.Name))
 	}
 
-	var code []byte
-	codeFileFlag := ctx.GlobalString(CodeFileFlag.Name)
-	codeFlag := ctx.GlobalString(CodeFlag.Name)
-
+	var (
+		code []byte
+		ret  []byte
+		err  error
+	)
 	// The '--code' or '--codefile' flag overrides code in state
-	if codeFileFlag != "" || codeFlag != "" {
+	if ctx.GlobalString(CodeFileFlag.Name) != "" {
 		var hexcode []byte
-		if codeFileFlag != "" {
-			var err error
-			// If - is specified, it means that code comes from stdin
-			if codeFileFlag == "-" {
-				//Try reading from stdin
-				if hexcode, err = io.ReadAll(os.Stdin); err != nil {
-					fmt.Printf("Could not load code from stdin: %v\n", err)
-					os.Exit(1)
-				}
-			} else {
-				// Codefile with hex assembly
-				if hexcode, err = os.ReadFile(codeFileFlag); err != nil {
-					fmt.Printf("Could not load code from file: %v\n", err)
-					os.Exit(1)
-				}
+		var err error
+		// If - is specified, it means that code comes from stdin
+		if ctx.GlobalString(CodeFileFlag.Name) == "-" {
+			//Try reading from stdin
+			if hexcode, err = ioutil.ReadAll(os.Stdin); err != nil {
+				fmt.Printf("Could not load code from stdin: %v\n", err)
+				os.Exit(1)
 			}
 		} else {
-			hexcode = []byte(codeFlag)
+			// Codefile with hex assembly
+			if hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name)); err != nil {
+				fmt.Printf("Could not load code from file: %v\n", err)
+				os.Exit(1)
+			}
 		}
-		hexcode = bytes.TrimSpace(hexcode)
-		if len(hexcode)%2 != 0 {
-			fmt.Printf("Invalid input length for hex data (%d)\n", len(hexcode))
-			os.Exit(1)
-		}
-		code = common.FromHex(string(hexcode))
+		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
+
+	} else if ctx.GlobalString(CodeFlag.Name) != "" {
+		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
 	} else if fn := ctx.Args().First(); len(fn) > 0 {
 		// EASM-file to compile
-		src, err := os.ReadFile(fn)
+		src, err := ioutil.ReadFile(fn)
 		if err != nil {
 			return err
 		}
@@ -197,6 +155,7 @@ func runCmd(ctx *cli.Context) error {
 		}
 		code = common.Hex2Bytes(bin)
 	}
+
 	initialGas := ctx.GlobalUint64(GasFlag.Name)
 	if genesisConfig.GasLimit != 0 {
 		initialGas = genesisConfig.GasLimit
@@ -232,50 +191,23 @@ func runCmd(ctx *cli.Context) error {
 
 	if chainConfig != nil {
 		runtimeConfig.ChainConfig = chainConfig
-	} else {
-		runtimeConfig.ChainConfig = params.AllEthashProtocolChanges
 	}
-
-	var hexInput []byte
-	if inputFileFlag := ctx.GlobalString(InputFileFlag.Name); inputFileFlag != "" {
-		var err error
-		if hexInput, err = os.ReadFile(inputFileFlag); err != nil {
-			fmt.Printf("could not load input from file: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		hexInput = []byte(ctx.GlobalString(InputFlag.Name))
-	}
-	hexInput = bytes.TrimSpace(hexInput)
-	if len(hexInput)%2 != 0 {
-		fmt.Println("input length must be even")
-		os.Exit(1)
-	}
-	input := common.FromHex(string(hexInput))
-
-	var execFunc func() ([]byte, uint64, error)
+	tstart := time.Now()
+	var leftOverGas uint64
 	if ctx.GlobalBool(CreateFlag.Name) {
-		input = append(code, input...)
-		execFunc = func() ([]byte, uint64, error) {
-			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
-			return output, gasLeft, err
-		}
+		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
+		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
 	} else {
 		if len(code) > 0 {
 			statedb.SetCode(receiver, code)
 		}
-		execFunc = func() ([]byte, uint64, error) {
-			return runtime.Call(receiver, input, &runtimeConfig)
-		}
+		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
-
-	bench := ctx.GlobalBool(BenchFlag.Name)
-	output, leftOverGas, stats, err := timedExec(bench, execFunc)
+	execTime := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
-		statedb.Commit(true)
 		statedb.IntermediateRoot(true)
-		fmt.Println(string(statedb.Dump(nil)))
+		fmt.Println(string(statedb.Dump()))
 	}
 
 	if memProfilePath := ctx.GlobalString(MemProfileFlag.Name); memProfilePath != "" {
@@ -294,21 +226,26 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.GlobalBool(DebugFlag.Name) {
 		if debugLogger != nil {
 			fmt.Fprintln(os.Stderr, "#### TRACE ####")
-			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
+			vm.WriteTrace(os.Stderr, debugLogger.StructLogs())
 		}
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
-		logger.WriteLogs(os.Stderr, statedb.Logs())
+		vm.WriteLogs(os.Stderr, statedb.Logs())
 	}
 
-	if bench || ctx.GlobalBool(StatDumpFlag.Name) {
-		fmt.Fprintf(os.Stderr, `EVM gas used:    %d
-execution time:  %v
-allocations:     %d
-allocated bytes: %d
-`, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
+	if ctx.GlobalBool(StatDumpFlag.Name) {
+		var mem goruntime.MemStats
+		goruntime.ReadMemStats(&mem)
+		fmt.Fprintf(os.Stderr, `evm execution time: %v
+heap objects:       %d
+allocations:        %d
+total allocations:  %d
+GC calls:           %d
+Gas used:           %d
+
+`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
 	}
 	if tracer == nil {
-		fmt.Printf("0x%x\n", output)
+		fmt.Printf("0x%x\n", ret)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}

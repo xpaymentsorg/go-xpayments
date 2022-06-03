@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"os"
 
@@ -59,23 +60,10 @@ type KeccakState interface {
 	Read([]byte) (int, error)
 }
 
-// NewKeccakState creates a new KeccakState
-func NewKeccakState() KeccakState {
-	return sha3.NewLegacyKeccak256().(KeccakState)
-}
-
-// HashData hashes the provided data using the KeccakState and returns a 32 byte hash
-func HashData(kh KeccakState, data []byte) (h common.Hash) {
-	kh.Reset()
-	kh.Write(data)
-	kh.Read(h[:])
-	return h
-}
-
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	b := make([]byte, 32)
-	d := NewKeccakState()
+	d := sha3.NewLegacyKeccak256().(KeccakState)
 	for _, b := range data {
 		d.Write(b)
 	}
@@ -86,7 +74,7 @@ func Keccak256(data ...[]byte) []byte {
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
-	d := NewKeccakState()
+	d := sha3.NewLegacyKeccak256().(KeccakState)
 	for _, b := range data {
 		d.Write(b)
 	}
@@ -103,7 +91,7 @@ func Keccak512(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
-// CreateAddress creates an ethereum address given the bytes and the nonce
+// CreateAddress creates a xPayments address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Keccak256(data)[12:])
@@ -249,7 +237,7 @@ func checkKeyFileEnd(r *bufio.Reader) error {
 // restrictive permissions. The key data is saved hex-encoded.
 func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 	k := hex.EncodeToString(FromECDSA(key))
-	return os.WriteFile(file, []byte(k), 0600)
+	return ioutil.WriteFile(file, []byte(k), 0600)
 }
 
 // GenerateKey generates a new private key.

@@ -20,57 +20,47 @@ import (
 	"encoding"
 	"errors"
 	"flag"
+	"fmt"
 	"math/big"
 	"os"
 	"os/user"
 	"path"
 	"strings"
 
+	"github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/common/math"
-	"gopkg.in/urfave/cli.v1"
 )
 
 // Custom type which is registered in the flags library which cli uses for
 // argument parsing. This allows us to expand Value to an absolute path when
 // the argument is parsed
-type DirectoryString string
-
-func (s *DirectoryString) String() string {
-	return string(*s)
+type DirectoryString struct {
+	Value string
 }
 
-func (s *DirectoryString) Set(value string) error {
-	*s = DirectoryString(expandPath(value))
+func (d *DirectoryString) String() string {
+	return d.Value
+}
+
+func (d *DirectoryString) Set(value string) error {
+	d.Value = expandPath(value)
 	return nil
 }
 
 // Custom cli.Flag type which expand the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
-	Name   string
-	Value  DirectoryString
-	Usage  string
-	EnvVar string
+	Name  string
+	Value DirectoryString
+	Usage string
 }
 
-func (f DirectoryFlag) String() string {
-	return cli.FlagStringer(f)
-}
-
-// called by cli library, grabs variable from environment (if in env)
-// and adds variable to flag set for parsing.
-func (f DirectoryFlag) Apply(set *flag.FlagSet) {
-	eachName(f.Name, func(name string) {
-		set.Var(&f.Value, f.Name, f.Usage)
-	})
-}
-
-func (f DirectoryFlag) GetName() string {
-	return f.Name
-}
-
-func (f *DirectoryFlag) Set(value string) {
-	f.Value.Set(value)
+func (d DirectoryFlag) String() string {
+	fmtString := "%s %v\t%v"
+	if len(d.Value.Value) > 0 {
+		fmtString = "%s \"%v\"\t%v"
+	}
+	return fmt.Sprintf(fmtString, prefixedNames(d.Name), d.Value.Value, d.Usage)
 }
 
 func eachName(longName string, fn func(string)) {
@@ -79,6 +69,14 @@ func eachName(longName string, fn func(string)) {
 		name = strings.Trim(name, " ")
 		fn(name)
 	}
+}
+
+// called by cli library, grabs variable from environment (if in env)
+// and adds variable to flag set for parsing.
+func (d DirectoryFlag) Apply(set *flag.FlagSet) {
+	eachName(d.Name, func(name string) {
+		set.Var(&d.Value, d.Name, d.Usage)
+	})
 }
 
 type TextMarshaler interface {
@@ -105,10 +103,9 @@ func (v textMarshalerVal) Set(s string) error {
 
 // TextMarshalerFlag wraps a TextMarshaler value.
 type TextMarshalerFlag struct {
-	Name   string
-	Value  TextMarshaler
-	Usage  string
-	EnvVar string
+	Name  string
+	Value TextMarshaler
+	Usage string
 }
 
 func (f TextMarshalerFlag) GetName() string {
@@ -116,7 +113,7 @@ func (f TextMarshalerFlag) GetName() string {
 }
 
 func (f TextMarshalerFlag) String() string {
-	return cli.FlagStringer(f)
+	return fmt.Sprintf("%s \"%v\"\t%v", prefixedNames(f.Name), f.Value, f.Usage)
 }
 
 func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
@@ -137,10 +134,9 @@ func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
 // BigFlag is a command line flag that accepts 256 bit big integers in decimal or
 // hexadecimal syntax.
 type BigFlag struct {
-	Name   string
-	Value  *big.Int
-	Usage  string
-	EnvVar string
+	Name  string
+	Value *big.Int
+	Usage string
 }
 
 // bigValue turns *big.Int into a flag.Value
@@ -154,11 +150,11 @@ func (b *bigValue) String() string {
 }
 
 func (b *bigValue) Set(s string) error {
-	intVal, ok := math.ParseBig256(s)
+	int, ok := math.ParseBig256(s)
 	if !ok {
 		return errors.New("invalid integer syntax")
 	}
-	*b = (bigValue)(*intVal)
+	*b = (bigValue)(*int)
 	return nil
 }
 
@@ -167,12 +163,15 @@ func (f BigFlag) GetName() string {
 }
 
 func (f BigFlag) String() string {
-	return cli.FlagStringer(f)
+	fmtString := "%s %v\t%v"
+	if f.Value != nil {
+		fmtString = "%s \"%v\"\t%v"
+	}
+	return fmt.Sprintf(fmtString, prefixedNames(f.Name), f.Value, f.Usage)
 }
 
 func (f BigFlag) Apply(set *flag.FlagSet) {
 	eachName(f.Name, func(name string) {
-		f.Value = new(big.Int)
 		set.Var((*bigValue)(f.Value), f.Name, f.Usage)
 	})
 }
@@ -186,6 +185,36 @@ func GlobalBig(ctx *cli.Context, name string) *big.Int {
 	return (*big.Int)(val.(*bigValue))
 }
 
+func prefixFor(name string) (prefix string) {
+	if len(name) == 1 {
+		prefix = "-"
+	} else {
+		prefix = "--"
+	}
+
+	return
+}
+
+func prefixedNames(fullName string) (prefixed string) {
+	parts := strings.Split(fullName, ",")
+	for i, name := range parts {
+		name = strings.Trim(name, " ")
+		prefixed += prefixFor(name) + name
+		if i < len(parts)-1 {
+			prefixed += ", "
+		}
+	}
+	return
+}
+
+func (d DirectoryFlag) GetName() string {
+	return d.Name
+}
+
+func (d *DirectoryFlag) Set(value string) {
+	d.Value.Value = value
+}
+
 // Expands a file path
 // 1. replace tilde with users home dir
 // 2. expands embedded environment variables
@@ -193,14 +222,14 @@ func GlobalBig(ctx *cli.Context, name string) *big.Int {
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
-		if home := HomeDir(); home != "" {
+		if home := homeDir(); home != "" {
 			p = home + p[1:]
 		}
 	}
 	return path.Clean(os.ExpandEnv(p))
 }
 
-func HomeDir() string {
+func homeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}

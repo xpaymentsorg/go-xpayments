@@ -22,21 +22,14 @@ import (
 	"fmt"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/trie"
 )
 
-var (
-	sha3Nil = crypto.Keccak256Hash(nil)
-)
-
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
-	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr), nil)
+	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr))
 	return state
 }
 
@@ -73,11 +66,10 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 }
 
 func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	if codeHash == sha3Nil {
+	if codeHash == sha3_nil {
 		return nil, nil
 	}
-	code := rawdb.ReadCode(db.backend.Database(), codeHash)
-	if len(code) != 0 {
+	if code, err := db.backend.Database().GlobalTable().Get(codeHash[:]); err == nil {
 		return code, nil
 	}
 	id := *db.id
@@ -112,21 +104,10 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
-func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	key = crypto.Keccak256(key)
-	value, err := rlp.EncodeToBytes(acc)
-	if err != nil {
-		return fmt.Errorf("decoding error in account update: %w", err)
-	}
-	return t.do(key, func() error {
-		return t.trie.TryUpdate(key, value)
-	})
-}
-
 func (t *odrTrie) TryUpdate(key, value []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {
-		return t.trie.TryUpdate(key, value)
+		return t.trie.TryDelete(key)
 	})
 }
 
@@ -137,9 +118,9 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, int, error) {
+func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {
 	if t.trie == nil {
-		return t.id.Root, 0, nil
+		return t.id.Root, nil
 	}
 	return t.trie.Commit(onleaf)
 }
@@ -159,7 +140,7 @@ func (t *odrTrie) GetKey(sha []byte) []byte {
 	return nil
 }
 
-func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb common.Putter) error {
 	return errors.New("not implemented, needs client/server interface split")
 }
 
@@ -169,7 +150,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 	for {
 		var err error
 		if t.trie == nil {
-			t.trie, err = trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t.trie, err = trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database().GlobalTable()))
 		}
 		if err == nil {
 			err = fn()
@@ -195,7 +176,7 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 	// Open the actual non-ODR trie if that hasn't happened yet.
 	if t.trie == nil {
 		it.do(func() error {
-			t, err := trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database().GlobalTable()))
 			if err == nil {
 				it.t.trie = t
 			}

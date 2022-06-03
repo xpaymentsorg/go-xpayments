@@ -24,10 +24,14 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
-	"github.com/xpaymentsorg/go-xpayments/internal/jsre/deps"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/signer/core"
+	"github.com/xpaymentsorg/go-xpayments/signer/rules/deps"
 	"github.com/xpaymentsorg/go-xpayments/signer/storage"
+)
+
+var (
+	BigNumber_JS = deps.MustAsset("bignumber.js")
 )
 
 // consoleOutput is an override for the console.log and console.error methods to
@@ -95,7 +99,7 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error
 	vm.Set("storage", storageObj)
 
 	// Load bootstrap libraries
-	script, err := goja.Compile("bignumber.js", deps.BigNumberJS, true)
+	script, err := goja.Compile("bignumber.js", string(BigNumber_JS), true)
 	if err != nil {
 		log.Warn("Failed loading libraries", "err", err)
 		return goja.Undefined(), err

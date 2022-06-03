@@ -18,30 +18,13 @@ package trie
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
 )
-
-func TestEmptyIterator(t *testing.T) {
-	trie := newEmpty()
-	iter := trie.NodeIterator(nil)
-
-	seen := make(map[string]struct{})
-	for iter.Next(true) {
-		seen[string(iter.Path())] = struct{}{}
-	}
-	if len(seen) != 0 {
-		t.Fatal("Unexpected trie node iterated")
-	}
-}
 
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
@@ -137,14 +120,11 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			}
 		}
 	}
-	it := db.diskdb.NewIterator(nil, nil)
-	for it.Next() {
-		key := it.Key()
+	for _, key := range db.diskdb.(*ethdb.MemDatabase).Keys() {
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {
 			t.Errorf("state entry not reported %x", key)
 		}
 	}
-	it.Release()
 }
 
 type kvs struct{ k, v string }
@@ -297,7 +277,7 @@ func TestUnionIterator(t *testing.T) {
 }
 
 func TestIteratorNoDups(t *testing.T) {
-	tr, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	var tr Trie
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -309,7 +289,7 @@ func TestIteratorContinueAfterErrorDisk(t *testing.T)    { testIteratorContinueA
 func TestIteratorContinueAfterErrorMemonly(t *testing.T) { testIteratorContinueAfterError(t, true) }
 
 func testIteratorContinueAfterError(t *testing.T, memonly bool) {
-	diskdb := memorydb.New()
+	diskdb := ethdb.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
 	tr, _ := New(common.Hash{}, triedb)
@@ -318,7 +298,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	}
 	tr.Commit(nil)
 	if !memonly {
-		triedb.Commit(tr.Hash(), true, nil)
+		triedb.Commit(tr.Hash(), true)
 	}
 	wantNodeCount := checkIteratorNoDups(t, tr.NodeIterator(nil), nil)
 
@@ -329,11 +309,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	if memonly {
 		memKeys = triedb.Nodes()
 	} else {
-		it := diskdb.NewIterator(nil, nil)
-		for it.Next() {
-			diskKeys = append(diskKeys, it.Key())
-		}
-		it.Release()
+		diskKeys = diskdb.Keys()
 	}
 	for i := 0; i < 20; i++ {
 		// Create trie that will load all nodes from DB.
@@ -400,16 +376,16 @@ func TestIteratorContinueAfterSeekErrorMemonly(t *testing.T) {
 
 func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	// Commit test trie to db, then remove the node containing "bars".
-	diskdb := memorydb.New()
+	diskdb := ethdb.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
 	ctr, _ := New(common.Hash{}, triedb)
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
-	root, _, _ := ctr.Commit(nil)
+	root, _ := ctr.Commit(nil)
 	if !memonly {
-		triedb.Commit(root, true, nil)
+		triedb.Commit(root, true)
 	}
 	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
 	var (
@@ -456,141 +432,4 @@ func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) in
 		seen[string(it.Path())] = true
 	}
 	return len(seen)
-}
-
-type loggingDb struct {
-	getCount uint64
-	backend  ethdb.KeyValueStore
-}
-
-func (l *loggingDb) Has(key []byte) (bool, error) {
-	return l.backend.Has(key)
-}
-
-func (l *loggingDb) Get(key []byte) ([]byte, error) {
-	l.getCount++
-	return l.backend.Get(key)
-}
-
-func (l *loggingDb) Put(key []byte, value []byte) error {
-	return l.backend.Put(key, value)
-}
-
-func (l *loggingDb) Delete(key []byte) error {
-	return l.backend.Delete(key)
-}
-
-func (l *loggingDb) NewBatch() ethdb.Batch {
-	return l.backend.NewBatch()
-}
-
-func (l *loggingDb) NewBatchWithSize(size int) ethdb.Batch {
-	return l.backend.NewBatchWithSize(size)
-}
-
-func (l *loggingDb) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return l.backend.NewIterator(prefix, start)
-}
-
-func (l *loggingDb) NewSnapshot() (ethdb.Snapshot, error) {
-	return l.backend.NewSnapshot()
-}
-
-func (l *loggingDb) Stat(property string) (string, error) {
-	return l.backend.Stat(property)
-}
-
-func (l *loggingDb) Compact(start []byte, limit []byte) error {
-	return l.backend.Compact(start, limit)
-}
-
-func (l *loggingDb) Close() error {
-	return l.backend.Close()
-}
-
-// makeLargeTestTrie create a sample test trie
-func makeLargeTestTrie() (*Database, *SecureTrie, *loggingDb) {
-	// Create an empty trie
-	logDb := &loggingDb{0, memorydb.New()}
-	triedb := NewDatabase(logDb)
-	trie, _ := NewSecure(common.Hash{}, triedb)
-
-	// Fill it with some arbitrary data
-	for i := 0; i < 10000; i++ {
-		key := make([]byte, 32)
-		val := make([]byte, 32)
-		binary.BigEndian.PutUint64(key, uint64(i))
-		binary.BigEndian.PutUint64(val, uint64(i))
-		key = crypto.Keccak256(key)
-		val = crypto.Keccak256(val)
-		trie.Update(key, val)
-	}
-	trie.Commit(nil)
-	// Return the generated trie
-	return triedb, trie, logDb
-}
-
-// Tests that the node iterator indeed walks over the entire database contents.
-func TestNodeIteratorLargeTrie(t *testing.T) {
-	// Create some arbitrary test trie to iterate
-	db, trie, logDb := makeLargeTestTrie()
-	db.Cap(0) // flush everything
-	// Do a seek operation
-	trie.NodeIterator(common.FromHex("0x77667766776677766778855885885885"))
-	// master: 24 get operations
-	// this pr: 5 get operations
-	if have, want := logDb.getCount, uint64(5); have != want {
-		t.Fatalf("Too many lookups during seek, have %d want %d", have, want)
-	}
-}
-
-func TestIteratorNodeBlob(t *testing.T) {
-	var (
-		db      = memorydb.New()
-		triedb  = NewDatabase(db)
-		trie, _ = New(common.Hash{}, triedb)
-	)
-	vals := []struct{ k, v string }{
-		{"do", "verb"},
-		{"ether", "wookiedoo"},
-		{"horse", "stallion"},
-		{"shaman", "horse"},
-		{"doge", "coin"},
-		{"dog", "puppy"},
-		{"somethingveryoddindeedthis is", "myothernodedata"},
-	}
-	all := make(map[string]string)
-	for _, val := range vals {
-		all[val.k] = val.v
-		trie.Update([]byte(val.k), []byte(val.v))
-	}
-	trie.Commit(nil)
-	triedb.Cap(0)
-
-	found := make(map[common.Hash][]byte)
-	it := trie.NodeIterator(nil)
-	for it.Next(true) {
-		if it.Hash() == (common.Hash{}) {
-			continue
-		}
-		found[it.Hash()] = it.NodeBlob()
-	}
-
-	dbIter := db.NewIterator(nil, nil)
-	defer dbIter.Release()
-
-	var count int
-	for dbIter.Next() {
-		got, present := found[common.BytesToHash(dbIter.Key())]
-		if !present {
-			t.Fatalf("Miss trie node %v", dbIter.Key())
-		}
-		if !bytes.Equal(got, dbIter.Value()) {
-			t.Fatalf("Unexpected trie node want %v got %v", dbIter.Value(), got)
-		}
-		count += 1
-	}
-	if count != len(found) {
-		t.Fatal("Find extra trie node via iterator")
-	}
 }

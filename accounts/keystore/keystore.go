@@ -36,7 +36,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/event"
 )
 
 var (
@@ -65,10 +64,9 @@ type KeyStore struct {
 	changes  chan struct{}                // Channel receiving change notifications from the cache
 	unlocked map[common.Address]*unlocked // Currently unlocked account (decrypted private keys)
 
-	wallets     []accounts.Wallet       // Wallet wrappers around the individual key files
-	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
-	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
-	updating    bool                    // Whether the event notification loop is running
+	wallets    []accounts.Wallet   // Wallet wrappers around the individual key files
+	updateFeed accounts.WalletFeed // Event feed to notify wallet additions/removals
+	updating   bool                // Whether the event notification loop is running
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
@@ -182,20 +180,23 @@ func (ks *KeyStore) refreshWallets() {
 
 // Subscribe implements accounts.Backend, creating an async subscription to
 // receive notifications on the addition or removal of keystore wallets.
-func (ks *KeyStore) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
+func (ks *KeyStore) Subscribe(sink chan<- accounts.WalletEvent, name string) {
 	// We need the mutex to reliably start/stop the update loop
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 
 	// Subscribe the caller and track the subscriber count
-	sub := ks.updateScope.Track(ks.updateFeed.Subscribe(sink))
+	ks.updateFeed.Subscribe(sink, name)
 
 	// Subscribers require an active notification loop, start it
 	if !ks.updating {
 		ks.updating = true
 		go ks.updater()
 	}
-	return sub
+}
+
+func (ks *KeyStore) Unsubscribe(sink chan<- accounts.WalletEvent) {
+	ks.updateFeed.Unsubscribe(sink)
 }
 
 // updater is responsible for maintaining an up-to-date list of wallets stored in
@@ -215,7 +216,7 @@ func (ks *KeyStore) updater() {
 
 		// If all our subscribers left, stop the updater
 		ks.mu.Lock()
-		if ks.updateScope.Count() == 0 {
+		if ks.updateFeed.Len() == 0 {
 			ks.updating = false
 			ks.mu.Unlock()
 			return
@@ -283,9 +284,11 @@ func (ks *KeyStore) SignTx(a accounts.Account, tx *types.Transaction, chainID *b
 	if !found {
 		return nil, ErrLocked
 	}
-	// Depending on the presence of the chain ID, sign with 2718 or homestead
-	signer := types.LatestSignerForChainID(chainID)
-	return types.SignTx(tx, signer, unlockedKey.PrivateKey)
+	// Depending on the presence of the chain ID, sign with EIP155 or homestead
+	if chainID != nil {
+		return types.SignTx(tx, types.NewEIP155Signer(chainID), unlockedKey.PrivateKey)
+	}
+	return types.SignTx(tx, types.HomesteadSigner{}, unlockedKey.PrivateKey)
 }
 
 // SignHashWithPassphrase signs hash if the private key matching the given address
@@ -308,9 +311,12 @@ func (ks *KeyStore) SignTxWithPassphrase(a accounts.Account, passphrase string, 
 		return nil, err
 	}
 	defer zeroKey(key.PrivateKey)
-	// Depending on the presence of the chain ID, sign with or without replay protection.
-	signer := types.LatestSignerForChainID(chainID)
-	return types.SignTx(tx, signer, key.PrivateKey)
+
+	// Depending on the presence of the chain ID, sign with EIP155 or homestead
+	if chainID != nil {
+		return types.SignTx(tx, types.NewEIP155Signer(chainID), key.PrivateKey)
+	}
+	return types.SignTx(tx, types.HomesteadSigner{}, key.PrivateKey)
 }
 
 // Unlock unlocks the given account indefinitely.

@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package light implements on-demand retrieval capable state and chain objects
+// for the Ethereum Light Client.
 package les
 
 import (
@@ -21,8 +23,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/xpaymentsorg/go-xpayments/common/mclock"
 )
 
 type testDistReq struct {
@@ -86,8 +86,8 @@ func (p *testDistPeer) worker(t *testing.T, checkOrder bool, stop chan struct{})
 const (
 	testDistBufLimit       = 10000000
 	testDistMaxCost        = 1000000
-	testDistPeerCount      = 2
-	testDistReqCount       = 10
+	testDistPeerCount      = 5
+	testDistReqCount       = 50000
 	testDistMaxResendCount = 3
 )
 
@@ -97,17 +97,17 @@ func (p *testDistPeer) waitBefore(cost uint64) (time.Duration, float64) {
 	p.lock.RUnlock()
 	if sumCost < testDistBufLimit {
 		return 0, float64(testDistBufLimit-sumCost) / float64(testDistBufLimit)
+	} else {
+		return time.Duration(sumCost - testDistBufLimit), 0
 	}
-	return time.Duration(sumCost - testDistBufLimit), 0
 }
 
 func (p *testDistPeer) canQueue() bool {
 	return true
 }
 
-func (p *testDistPeer) queueSend(f func()) bool {
+func (p *testDistPeer) queueSend(f func()) {
 	f()
-	return true
 }
 
 func TestRequestDistributor(t *testing.T) {
@@ -122,16 +122,13 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	dist := newRequestDistributor(nil, &mclock.System{})
+	dist := newRequestDistributor(nil, stop)
 	var peers [testDistPeerCount]*testDistPeer
 	for i := range peers {
 		peers[i] = &testDistPeer{}
 		go peers[i].worker(t, !resend, stop)
 		dist.registerTestPeer(peers[i])
 	}
-	// Disable the mechanism that we will wait a few time for request
-	// even there is no suitable peer to send right now.
-	waitForPeers = 0
 
 	var wg sync.WaitGroup
 

@@ -19,12 +19,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io/ioutil"
 	"strings"
 
+	"github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"gopkg.in/urfave/cli.v1"
 )
 
 // getPassphrase obtains a passphrase given by the user.  It first checks the
@@ -34,7 +34,7 @@ func getPassphrase(ctx *cli.Context, confirmation bool) string {
 	// Look for the --passwordfile flag.
 	passphraseFile := ctx.String(passphraseFlag.Name)
 	if passphraseFile != "" {
-		content, err := os.ReadFile(passphraseFile)
+		content, err := ioutil.ReadFile(passphraseFile)
 		if err != nil {
 			utils.Fatalf("Failed to read password file '%s': %v",
 				passphraseFile, err)
@@ -49,7 +49,7 @@ func getPassphrase(ctx *cli.Context, confirmation bool) string {
 // signHash is a helper function that calculates a hash for the given message
 // that can be safely used to calculate a signature from.
 //
-// The hash is calculated as
+// The hash is calulcated as
 //   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.

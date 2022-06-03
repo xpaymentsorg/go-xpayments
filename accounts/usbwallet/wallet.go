@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/karalabe/usb"
-	ethereum "github.com/xpaymentsorg/go-xpayments"
+	xpayments "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
@@ -67,8 +67,6 @@ type driver interface {
 	// SignTx sends the transaction to the USB device and waits for the user to confirm
 	// or deny the transaction.
 	SignTx(path accounts.DerivationPath, tx *types.Transaction, chainID *big.Int) (common.Address, *types.Transaction, error)
-
-	SignTypedMessage(path accounts.DerivationPath, messageHash []byte, domainHash []byte) ([]byte, error)
 }
 
 // wallet represents the common functionality shared by all USB hardware
@@ -85,11 +83,11 @@ type wallet struct {
 	accounts []accounts.Account                         // List of derive accounts pinned on the hardware wallet
 	paths    map[common.Address]accounts.DerivationPath // Known derivation paths for signing operations
 
-	deriveNextPaths []accounts.DerivationPath // Next derivation paths for account auto-discovery (multiple bases supported)
-	deriveNextAddrs []common.Address          // Next derived account addresses for auto-discovery (multiple bases supported)
-	deriveChain     ethereum.ChainStateReader // Blockchain state reader to discover used account with
-	deriveReq       chan chan struct{}        // Channel to request a self-derivation on
-	deriveQuit      chan chan error           // Channel to terminate the self-deriver with
+	deriveNextPaths []accounts.DerivationPath  // Next derivation paths for account auto-discovery (multiple bases supported)
+	deriveNextAddrs []common.Address           // Next derived account addresses for auto-discovery (multiple bases supported)
+	deriveChain     xpayments.ChainStateReader // Blockchain state reader to discover used account with
+	deriveReq       chan chan struct{}         // Channel to request a self-derivation on
+	deriveQuit      chan chan error            // Channel to terminate the self-deriver with
 
 	healthQuit chan chan error
 
@@ -495,8 +493,8 @@ func (w *wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivation will increment the last component of the specified path
-// opposed to descending into a child path to allow discovering accounts starting
+// Note, self derivaton will increment the last component of the specified path
+// opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //
 // Some hardware wallets switched derivation paths through their evolution, so
@@ -505,7 +503,7 @@ func (w *wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 //
 // You can disable automatic account discovery by calling SelfDerive with a nil
 // chain state reader.
-func (w *wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader) {
+func (w *wallet) SelfDerive(bases []accounts.DerivationPath, chain xpayments.ChainStateReader) {
 	w.stateLock.Lock()
 	defer w.stateLock.Unlock()
 
@@ -526,46 +524,7 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
-
-	// Unless we are doing 712 signing, simply dispatch to signHash
-	if !(mimeType == accounts.MimetypeTypedData && len(data) == 66 && data[0] == 0x19 && data[1] == 0x01) {
-		return w.signHash(account, crypto.Keccak256(data))
-	}
-
-	// dispatch to 712 signing if the mimetype is TypedData and the format matches
-	w.stateLock.RLock() // Comms have own mutex, this is for the state fields
-	defer w.stateLock.RUnlock()
-
-	// If the wallet is closed, abort
-	if w.device == nil {
-		return nil, accounts.ErrWalletClosed
-	}
-	// Make sure the requested account is contained within
-	path, ok := w.paths[account.Address]
-	if !ok {
-		return nil, accounts.ErrUnknownAccount
-	}
-	// All infos gathered and metadata checks out, request signing
-	<-w.commsLock
-	defer func() { w.commsLock <- struct{}{} }()
-
-	// Ensure the device isn't screwed with while user confirmation is pending
-	// TODO(karalabe): remove if hotplug lands on Windows
-	w.hub.commsLock.Lock()
-	w.hub.commsPend++
-	w.hub.commsLock.Unlock()
-
-	defer func() {
-		w.hub.commsLock.Lock()
-		w.hub.commsPend--
-		w.hub.commsLock.Unlock()
-	}()
-	// Sign the transaction
-	signature, err := w.driver.SignTypedMessage(path, data[2:34], data[34:66])
-	if err != nil {
-		return nil, err
-	}
-	return signature, nil
+	return w.signHash(account, crypto.Keccak256(data))
 }
 
 // SignDataWithPassphrase implements accounts.Wallet, attempting to sign the given

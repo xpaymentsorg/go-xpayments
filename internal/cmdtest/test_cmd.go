@@ -21,12 +21,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"text/template"
@@ -55,13 +55,10 @@ type TestCmd struct {
 	Err error
 }
 
-var id int32
-
 // Run exec's the current binary using name as argv[0] which will trigger the
 // reexec init function for that name (e.g. "geth-test" in cmd/geth/run_test.go)
 func (tt *TestCmd) Run(name string, args ...string) {
-	id := atomic.AddInt32(&id, 1)
-	tt.stderr = &testlogger{t: tt.T, name: fmt.Sprintf("%d", id)}
+	tt.stderr = &testlogger{t: tt.T}
 	tt.cmd = &exec.Cmd{
 		Path:   reexec.Self(),
 		Args:   append([]string{name}, args...),
@@ -115,13 +112,6 @@ func (tt *TestCmd) Expect(tplsource string) {
 		tt.Fatal(err)
 	}
 	tt.Logf("Matched stdout text:\n%s", want)
-}
-
-// Output reads all output from stdout, and returns the data.
-func (tt *TestCmd) Output() []byte {
-	var buf []byte
-	tt.withKillTimeout(func() { buf, _ = io.ReadAll(tt.stdout) })
-	return buf
 }
 
 func (tt *TestCmd) matchExactOutput(want []byte) error {
@@ -183,7 +173,7 @@ func (tt *TestCmd) ExpectRegexp(regex string) (*regexp.Regexp, []string) {
 func (tt *TestCmd) ExpectExit() {
 	var output []byte
 	tt.withKillTimeout(func() {
-		output, _ = io.ReadAll(tt.stdout)
+		output, _ = ioutil.ReadAll(tt.stdout)
 	})
 	tt.WaitExit()
 	if tt.Cleanup != nil {
@@ -237,7 +227,7 @@ func (tt *TestCmd) Kill() {
 }
 
 func (tt *TestCmd) withKillTimeout(fn func()) {
-	timeout := time.AfterFunc(5*time.Second, func() {
+	timeout := time.AfterFunc(30*time.Second, func() {
 		tt.Log("killing the child process (timeout)")
 		tt.Kill()
 	})
@@ -248,17 +238,16 @@ func (tt *TestCmd) withKillTimeout(fn func()) {
 // testlogger logs all written lines via t.Log and also
 // collects them for later inspection.
 type testlogger struct {
-	t    *testing.T
-	mu   sync.Mutex
-	buf  bytes.Buffer
-	name string
+	t   *testing.T
+	mu  sync.Mutex
+	buf bytes.Buffer
 }
 
 func (tl *testlogger) Write(b []byte) (n int, err error) {
 	lines := bytes.Split(b, []byte("\n"))
 	for _, line := range lines {
 		if len(line) > 0 {
-			tl.t.Logf("(stderr:%v) %s", tl.name, line)
+			tl.t.Logf("(stderr) %s", line)
 		}
 	}
 	tl.mu.Lock()

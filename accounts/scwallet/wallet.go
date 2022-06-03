@@ -35,7 +35,7 @@ import (
 
 	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/status-im/keycard-go/derivationpath"
-	ethereum "github.com/xpaymentsorg/go-xpayments"
+	xpayments "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
@@ -119,11 +119,11 @@ type Wallet struct {
 	session *Session   // The secure communication session with the card
 	log     log.Logger // Contextual logger to tag the base with its id
 
-	deriveNextPaths []accounts.DerivationPath // Next derivation paths for account auto-discovery (multiple bases supported)
-	deriveNextAddrs []common.Address          // Next derived account addresses for auto-discovery (multiple bases supported)
-	deriveChain     ethereum.ChainStateReader // Blockchain state reader to discover used account with
-	deriveReq       chan chan struct{}        // Channel to request a self-derivation on
-	deriveQuit      chan chan error           // Channel to terminate the self-deriver with
+	deriveNextPaths []accounts.DerivationPath  // Next derivation paths for account auto-discovery (multiple bases supported)
+	deriveNextAddrs []common.Address           // Next derived account addresses for auto-discovery (multiple bases supported)
+	deriveChain     xpayments.ChainStateReader // Blockchain state reader to discover used account with
+	deriveReq       chan chan struct{}         // Channel to request a self-derivation on
+	deriveQuit      chan chan error            // Channel to terminate the self-deriver with
 }
 
 // NewWallet constructs and returns a new Wallet instance.
@@ -637,8 +637,8 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivation will increment the last component of the specified path
-// opposed to descending into a child path to allow discovering accounts starting
+// Note, self derivaton will increment the last component of the specified path
+// opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //
 // Some hardware wallets switched derivation paths through their evolution, so
@@ -647,7 +647,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 //
 // You can disable automatic account discovery by calling SelfDerive with a nil
 // chain state reader.
-func (w *Wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader) {
+func (w *Wallet) SelfDerive(bases []accounts.DerivationPath, chain xpayments.ChainStateReader) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -699,7 +699,7 @@ func (w *Wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 // the needed details via SignTxWithPassphrase, or by other means (e.g. unlock
 // the account in a keystore).
 func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	signer := types.LatestSignerForChainID(chainID)
+	signer := types.NewEIP155Signer(chainID)
 	hash := signer.Hash(tx)
 	sig, err := w.signHash(account, hash[:])
 	if err != nil {

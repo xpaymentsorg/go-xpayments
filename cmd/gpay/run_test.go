@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -28,7 +29,15 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
-type testgpay struct {
+func tmpdir(t *testing.T) string {
+	dir, err := ioutil.TempDir("", "geth-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+type testgeth struct {
 	*cmdtest.TestCmd
 
 	// template variables for expect
@@ -37,8 +46,8 @@ type testgpay struct {
 }
 
 func init() {
-	// Run the app if we've been exec'd as "gpay-test" in runGpay.
-	reexec.Register("gpay-test", func() {
+	// Run the app if we've been exec'd as "geth-test" in runGpay.
+	reexec.Register("geth-test", func() {
 		if err := app.Run(os.Args); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -55,32 +64,38 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// spawns gpay with the given command line args. If the args don't set --datadir, the
+// spawns geth with the given command line args. If the args don't set --datadir, the
 // child g gets a temporary data directory.
-func runGpay(t *testing.T, args ...string) *testgpay {
-	tt := &testgpay{}
+func runGpay(t *testing.T, args ...string) *testgeth {
+	tt := &testgeth{}
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 	for i, arg := range args {
-		switch arg {
-		case "--datadir":
+		switch {
+		case arg == "-datadir" || arg == "--datadir":
 			if i < len(args)-1 {
 				tt.Datadir = args[i+1]
 			}
-		case "--miner.etherbase":
+		case arg == "-etherbase" || arg == "--etherbase":
 			if i < len(args)-1 {
 				tt.Etherbase = args[i+1]
 			}
 		}
 	}
 	if tt.Datadir == "" {
-		// The temporary datadir will be removed automatically if something fails below.
-		tt.Datadir = t.TempDir()
-		args = append([]string{"--datadir", tt.Datadir}, args...)
+		tt.Datadir = tmpdir(t)
+		tt.Cleanup = func() { os.RemoveAll(tt.Datadir) }
+		args = append([]string{"-datadir", tt.Datadir}, args...)
+		// Remove the temporary datadir if something fails below.
+		defer func() {
+			if t.Failed() {
+				tt.Cleanup()
+			}
+		}()
 	}
 
-	// Boot "gpay". This actually runs the test binary but the TestMain
+	// Boot "geth". This actually runs the test binary but the TestMain
 	// function will prevent any tests from running.
-	tt.Run("gpay-test", args...)
+	tt.Run("geth-test", args...)
 
 	return tt
 }

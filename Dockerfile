@@ -1,33 +1,21 @@
-# Support setting various labels on the final image
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
+# Build gpay in a stock Go builder container
+FROM golang:1.17-alpine3.13 as builder
 
-# Build Geth in a stock Go builder container
-FROM golang:1.18-alpine as builder
+RUN apk --no-cache add build-base git mercurial gcc linux-headers
+ENV D=/gpay
+WORKDIR $D
+# cache dependencies
+ADD go.mod $D
+ADD go.sum $D
+RUN go mod download
+# build
+ADD . $D
+RUN cd $D && make all && mkdir -p /tmp/gpay && cp $D/bin/* /tmp/gpay/
 
-RUN apk add --no-cache gcc musl-dev linux-headers git
-
-# Get dependencies - will also be cached if we won't change go.mod/go.sum
-COPY go.mod /go-xpayments/
-COPY go.sum /go-xpayments/
-RUN cd /go-xpayments && go mod download
-
-ADD . /go-xpayments
-RUN cd /go-xpayments && go run build/ci.go install ./cmd/gpay
-
-# Pull Gpay into a second stage deploy alpine container
+# Pull all binaries into a second stage deploy alpine container
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
-COPY --from=builder /go-xpayments/build/bin/gpay /usr/local/bin/
-
-EXPOSE 8545 8546 30303 30303/udp
-ENTRYPOINT ["gpay"]
-
-# Add some metadata labels to help programatic image consumption
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
-
-LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"
+COPY --from=builder /tmp/gpay/* /usr/local/bin/
+EXPOSE 6060 8545 8546 30303 30303/udp 30304/udp
+CMD [ "gpay" ]

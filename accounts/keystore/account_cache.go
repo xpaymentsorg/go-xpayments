@@ -27,7 +27,6 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -79,7 +78,7 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
-		fileC:  fileCache{all: mapset.NewThreadUnsafeSet()},
+		fileC:  fileCache{all: make(map[string]struct{})},
 	}
 	ac.watcher = newWatcher(ac)
 	return ac, ac.notify
@@ -237,7 +236,7 @@ func (ac *accountCache) scanAccounts() error {
 		log.Debug("Failed to reload keystore contents", "err", err)
 		return err
 	}
-	if creates.Cardinality() == 0 && deletes.Cardinality() == 0 && updates.Cardinality() == 0 {
+	if len(creates) == 0 && len(deletes) == 0 && len(updates) == 0 {
 		return nil
 	}
 	// Create a helper method to scan the contents of the key files
@@ -262,31 +261,27 @@ func (ac *accountCache) scanAccounts() error {
 		switch {
 		case err != nil:
 			log.Debug("Failed to decode keystore key", "path", path, "err", err)
-		case addr == common.Address{}:
+		case (addr == common.Address{}):
 			log.Debug("Failed to decode keystore key", "path", path, "err", "missing or zero address")
 		default:
-			return &accounts.Account{
-				Address: addr,
-				URL:     accounts.URL{Scheme: KeyStoreScheme, Path: path},
-			}
+			return &accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}}
 		}
 		return nil
 	}
 	// Process all the file diffs
 	start := time.Now()
 
-	for _, p := range creates.ToSlice() {
-		if a := readAccount(p.(string)); a != nil {
+	for p := range creates {
+		if a := readAccount(p); a != nil {
 			ac.add(*a)
 		}
 	}
-	for _, p := range deletes.ToSlice() {
-		ac.deleteByFile(p.(string))
+	for p := range deletes {
+		ac.deleteByFile(p)
 	}
-	for _, p := range updates.ToSlice() {
-		path := p.(string)
-		ac.deleteByFile(path)
-		if a := readAccount(path); a != nil {
+	for p := range updates {
+		ac.deleteByFile(p)
+		if a := readAccount(p); a != nil {
 			ac.add(*a)
 		}
 	}

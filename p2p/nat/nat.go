@@ -91,14 +91,15 @@ func Parse(spec string) (Interface, error) {
 }
 
 const (
-	mapTimeout = 10 * time.Minute
+	mapTimeout        = 20 * time.Minute
+	mapUpdateInterval = 15 * time.Minute
 )
 
 // Map adds a port mapping on m and keeps it alive until c is closed.
 // This function is typically invoked in its own goroutine.
-func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, name string) {
+func Map(m Interface, c chan struct{}, protocol string, extport, intport int, name string) {
 	log := log.New("proto", protocol, "extport", extport, "intport", intport, "interface", m)
-	refresh := time.NewTimer(mapTimeout)
+	refresh := time.NewTimer(mapUpdateInterval)
 	defer func() {
 		refresh.Stop()
 		log.Debug("Deleting port mapping")
@@ -120,7 +121,7 @@ func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, 
 			if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
 				log.Debug("Couldn't add port mapping", "err", err)
 			}
-			refresh.Reset(mapTimeout)
+			refresh.Reset(mapUpdateInterval)
 		}
 	}
 }
@@ -128,15 +129,21 @@ func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, 
 // ExtIP assumes that the local machine is reachable on the given
 // external IP address, and that any required ports were mapped manually.
 // Mapping operations will not return an error but won't actually do anything.
-type ExtIP net.IP
+func ExtIP(ip net.IP) Interface {
+	if ip == nil {
+		panic("IP must not be nil")
+	}
+	return extIP(ip)
+}
 
-func (n ExtIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
-func (n ExtIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
+type extIP net.IP
+
+func (n extIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
+func (n extIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
 
 // These do nothing.
-
-func (ExtIP) AddMapping(string, int, int, string, time.Duration) error { return nil }
-func (ExtIP) DeleteMapping(string, int, int) error                     { return nil }
+func (extIP) AddMapping(string, int, int, string, time.Duration) error { return nil }
+func (extIP) DeleteMapping(string, int, int) error                     { return nil }
 
 // Any returns a port mapper that tries to discover any supported
 // mechanism on the local network.
@@ -219,8 +226,9 @@ func (n *autodisc) String() string {
 	defer n.mu.Unlock()
 	if n.found == nil {
 		return n.what
+	} else {
+		return n.found.String()
 	}
-	return n.found.String()
 }
 
 // wait blocks until auto-discovery has been performed.

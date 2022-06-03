@@ -62,14 +62,14 @@ func (w *wizard) manageServers() {
 	}
 }
 
-// makeServer reads a single line from stdin and interprets it as
-// username:identity@hostname to connect to. It tries to establish a
-// new SSH session and also executing some baseline validations.
+// makeServer reads a single line from stdin and interprets it as a hostname to
+// connect to. It tries to establish a new SSH session and also executing some
+// baseline validations.
 //
 // If connection succeeds, the server is added to the wizards configs!
 func (w *wizard) makeServer() string {
 	fmt.Println()
-	fmt.Println("What is the remote server's address ([username[:identity]@]hostname[:port])?")
+	fmt.Println("Please enter remote server's address:")
 
 	// Read and dial the server to ensure docker is present
 	input := w.readString()
@@ -87,7 +87,7 @@ func (w *wizard) makeServer() string {
 	return input
 }
 
-// selectServer lists the user all the currently known servers to choose from,
+// selectServer lists the user all the currnetly known servers to choose from,
 // also granting the option to add a new one.
 func (w *wizard) selectServer() string {
 	// List the available server to the user and wait for a choice
@@ -115,7 +115,7 @@ func (w *wizard) selectServer() string {
 // manageComponents displays a list of network components the user can tear down
 // and an option
 func (w *wizard) manageComponents() {
-	// List all the components we can tear down, along with an entry to deploy a new one
+	// List all the componens we can tear down, along with an entry to deploy a new one
 	fmt.Println()
 
 	var serviceHosts, serviceNames []string
@@ -171,26 +171,27 @@ func (w *wizard) deployComponent() {
 	// Print all the things we can deploy and wait or user choice
 	fmt.Println()
 	fmt.Println("What would you like to deploy? (recommended order)")
-	fmt.Println(" 1. Ethstats  - Network monitoring tool")
+	fmt.Println(" 1. Netstats  - Network monitoring tool")
 	fmt.Println(" 2. Bootnode  - Entry point of the network")
 	fmt.Println(" 3. Sealer    - Full node minting new blocks")
-	fmt.Println(" 4. Explorer  - Chain analysis webservice")
-	fmt.Println(" 5. Faucet    - Crypto faucet to give away funds")
-	fmt.Println(" 6. Dashboard - Website listing above web-services")
+	fmt.Println(" 4. Explorer  - Chain analysis webservice (ethash only)")
+	fmt.Println(" 5. Wallet    - Browser wallet for quick sends")
+	fmt.Println(" 6. Faucet    - Crypto faucet to give away funds")
 
 	switch w.read() {
 	case "1":
-		w.deployEthstats()
+		w.deployNetstats()
 	case "2":
 		w.deployNode(true)
 	case "3":
 		w.deployNode(false)
 	case "4":
-		w.deployExplorer()
+		//w.deployExplorer()
+		log.Error("explorer is not available")
 	case "5":
-		w.deployFaucet()
+		w.deployWallet()
 	case "6":
-		w.deployDashboard()
+		w.deployFaucet()
 	default:
 		log.Error("That's not something I can do")
 	}

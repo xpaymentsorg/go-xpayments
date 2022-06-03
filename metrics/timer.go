@@ -76,7 +76,10 @@ func NewTimer() Timer {
 }
 
 // NilTimer is a no-op Timer.
-type NilTimer struct{}
+type NilTimer struct {
+	h Histogram
+	m Meter
+}
 
 // Count is a no-op.
 func (NilTimer) Count() int64 { return 0 }

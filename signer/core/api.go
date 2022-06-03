@@ -33,8 +33,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
 	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
-	"github.com/xpaymentsorg/go-xpayments/signer/core/apitypes"
+	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/signer/storage"
 )
 
@@ -42,7 +41,7 @@ const (
 	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
 	numberOfAccountsToDerive = 10
 	// ExternalAPIVersion -- see extapi_changelog.md
-	ExternalAPIVersion = "6.1.0"
+	ExternalAPIVersion = "6.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
 	InternalAPIVersion = "7.0.1"
 )
@@ -54,17 +53,15 @@ type ExternalAPI interface {
 	// New request to create a new account
 	New(ctx context.Context) (common.Address, error)
 	// SignTransaction request to sign the specified transaction
-	SignTransaction(ctx context.Context, args apitypes.SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
+	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// SignData - request to sign the given data (plus prefix)
 	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error)
 	// SignTypedData - request to sign the given structured data (plus prefix)
-	SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data apitypes.TypedData) (hexutil.Bytes, error)
+	SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
 	// EcRecover - recover public key from given message and signature
 	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Version info about the APIs
 	Version(ctx context.Context) (string, error)
-	// SignGnosisSafeTransaction signs/confirms a gnosis-safe multisig transaction
-	SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error)
 }
 
 // UIClientAPI specifies what method a UI needs to implement to be able to be used as a
@@ -106,7 +103,7 @@ type Validator interface {
 	// ValidateTransaction does a number of checks on the supplied transaction, and
 	// returns either a list of warnings, or an error (indicating that the transaction
 	// should be immediately rejected).
-	ValidateTransaction(selector *string, tx *apitypes.SendTxArgs) (*apitypes.ValidationMessages, error)
+	ValidateTransaction(selector *string, tx *SendTxArgs) (*ValidationMessages, error)
 }
 
 // SignerAPI defines the actual implementation of ExternalAPI
@@ -189,24 +186,23 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 
 // MetadataFromContext extracts Metadata from a given context.Context
 func MetadataFromContext(ctx context.Context) Metadata {
-	info := rpc.PeerInfoFromContext(ctx)
-
 	m := Metadata{"NA", "NA", "NA", "", ""} // batman
 
-	if info.Transport != "" {
-		if info.Transport == "http" {
-			m.Scheme = info.HTTP.Version
-		}
-		m.Scheme = info.Transport
+	if v := ctx.Value("remote"); v != nil {
+		m.Remote = v.(string)
 	}
-	if info.RemoteAddr != "" {
-		m.Remote = info.RemoteAddr
+	if v := ctx.Value("scheme"); v != nil {
+		m.Scheme = v.(string)
 	}
-	if info.HTTP.Host != "" {
-		m.Local = info.HTTP.Host
+	if v := ctx.Value("local"); v != nil {
+		m.Local = v.(string)
 	}
-	m.Origin = info.HTTP.Origin
-	m.UserAgent = info.HTTP.UserAgent
+	if v := ctx.Value("Origin"); v != nil {
+		m.Origin = v.(string)
+	}
+	if v := ctx.Value("User-Agent"); v != nil {
+		m.UserAgent = v.(string)
+	}
 	return m
 }
 
@@ -223,24 +219,24 @@ func (m Metadata) String() string {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction apitypes.SendTxArgs       `json:"transaction"`
-		Callinfo    []apitypes.ValidationInfo `json:"call_info"`
-		Meta        Metadata                  `json:"meta"`
+		Transaction SendTxArgs       `json:"transaction"`
+		Callinfo    []ValidationInfo `json:"call_info"`
+		Meta        Metadata         `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
-		Transaction apitypes.SendTxArgs `json:"transaction"`
-		Approved    bool                `json:"approved"`
+		Transaction SendTxArgs `json:"transaction"`
+		Approved    bool       `json:"approved"`
 	}
 	SignDataRequest struct {
-		ContentType string                    `json:"content_type"`
-		Address     common.MixedcaseAddress   `json:"address"`
-		Rawdata     []byte                    `json:"raw_data"`
-		Messages    []*apitypes.NameValueType `json:"messages"`
-		Callinfo    []apitypes.ValidationInfo `json:"call_info"`
-		Hash        hexutil.Bytes             `json:"hash"`
-		Meta        Metadata                  `json:"meta"`
+		ContentType string                  `json:"content_type"`
+		Address     common.MixedcaseAddress `json:"address"`
+		Rawdata     []byte                  `json:"raw_data"`
+		Messages    []*NameValueType        `json:"messages"`
+		Callinfo    []ValidationInfo        `json:"call_info"`
+		Hash        hexutil.Bytes           `json:"hash"`
+		Meta        Metadata                `json:"meta"`
 	}
 	SignDataResponse struct {
 		Approved bool `json:"approved"`
@@ -324,65 +320,62 @@ func (api *SignerAPI) openTrezor(url accounts.URL) {
 
 // startUSBListener starts a listener for USB events, for hardware wallet interaction
 func (api *SignerAPI) startUSBListener() {
-	eventCh := make(chan accounts.WalletEvent, 16)
+	events := make(chan accounts.WalletEvent, 16)
 	am := api.am
-	am.Subscribe(eventCh)
-	// Open any wallets already attached
-	for _, wallet := range am.Wallets() {
-		if err := wallet.Open(""); err != nil {
-			log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
-			if err == usbwallet.ErrTrezorPINNeeded {
-				go api.openTrezor(wallet.URL())
-			}
-		}
-	}
-	go api.derivationLoop(eventCh)
-}
+	am.Subscribe(events, "core.SignerAPI-startUSBListener")
+	go func() {
 
-// derivationLoop listens for wallet events
-func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
-	// Listen for wallet event till termination
-	for event := range events {
-		switch event.Kind {
-		case accounts.WalletArrived:
-			if err := event.Wallet.Open(""); err != nil {
-				log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
+		// Open any wallets already attached
+		for _, wallet := range am.Wallets() {
+			if err := wallet.Open(""); err != nil {
+				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
 				if err == usbwallet.ErrTrezorPINNeeded {
-					go api.openTrezor(event.Wallet.URL())
+					go api.openTrezor(wallet.URL())
 				}
 			}
-		case accounts.WalletOpened:
-			status, _ := event.Wallet.Status()
-			log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
-			var derive = func(limit int, next func() accounts.DerivationPath) {
-				// Derive first N accounts, hardcoded for now
-				for i := 0; i < limit; i++ {
-					path := next()
-					if acc, err := event.Wallet.Derive(path, true); err != nil {
-						log.Warn("Account derivation failed", "error", err)
-					} else {
-						log.Info("Derived account", "address", acc.Address, "path", path)
+		}
+		// Listen for wallet event till termination
+		for event := range events {
+			switch event.Kind {
+			case accounts.WalletArrived:
+				if err := event.Wallet.Open(""); err != nil {
+					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
+					if err == usbwallet.ErrTrezorPINNeeded {
+						go api.openTrezor(event.Wallet.URL())
 					}
 				}
+			case accounts.WalletOpened:
+				status, _ := event.Wallet.Status()
+				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+				var derive = func(numToDerive int, base accounts.DerivationPath) {
+					// Derive first N accounts, hardcoded for now
+					var nextPath = make(accounts.DerivationPath, len(base))
+					copy(nextPath[:], base[:])
+
+					for i := 0; i < numToDerive; i++ {
+						acc, err := event.Wallet.Derive(nextPath, true)
+						if err != nil {
+							log.Warn("Account derivation failed", "error", err)
+						} else {
+							log.Info("Derived account", "address", acc.Address, "path", nextPath)
+						}
+						nextPath[len(nextPath)-1]++
+					}
+				}
+				if event.Wallet.URL().Scheme == "ledger" {
+					log.Info("Deriving ledger default paths")
+					derive(numberOfAccountsToDerive/2, accounts.DefaultBaseDerivationPath)
+					log.Info("Deriving ledger legacy paths")
+					derive(numberOfAccountsToDerive/2, accounts.LegacyLedgerBaseDerivationPath)
+				} else {
+					derive(numberOfAccountsToDerive, accounts.DefaultBaseDerivationPath)
+				}
+			case accounts.WalletDropped:
+				log.Info("Old wallet dropped", "url", event.Wallet.URL())
+				event.Wallet.Close()
 			}
-			log.Info("Deriving default paths")
-			derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.DefaultBaseDerivationPath))
-			if event.Wallet.URL().Scheme == "ledger" {
-				log.Info("Deriving ledger legacy paths")
-				derive(numberOfAccountsToDerive, accounts.DefaultIterator(accounts.LegacyLedgerBaseDerivationPath))
-				log.Info("Deriving ledger live paths")
-				// For ledger live, since it's based off the same (DefaultBaseDerivationPath)
-				// as one we've already used, we need to step it forward one step to avoid
-				// hitting the same path again
-				nextFn := accounts.LedgerLiveIterator(accounts.DefaultBaseDerivationPath)
-				nextFn()
-				derive(numberOfAccountsToDerive, nextFn)
-			}
-		case accounts.WalletDropped:
-			log.Info("Old wallet dropped", "url", event.Wallet.URL())
-			event.Wallet.Close()
 		}
-	}
+	}()
 }
 
 // List returns the set of wallet this signer manages. Each wallet can contain
@@ -459,16 +452,6 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 // it also returns 'true' if the transaction was modified, to make it possible to configure the signer not to allow
 // UI-modifications to requests
 func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
-	var intPtrModified = func(a, b *hexutil.Big) bool {
-		aBig := (*big.Int)(a)
-		bBig := (*big.Int)(b)
-		if aBig != nil && bBig != nil {
-			return aBig.Cmp(bBig) != 0
-		}
-		// One or both of them are nil
-		return a != b
-	}
-
 	modified := false
 	if f0, f1 := original.Transaction.From, new.Transaction.From; !reflect.DeepEqual(f0, f1) {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
@@ -482,17 +465,9 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
-	if a, b := original.Transaction.GasPrice, new.Transaction.GasPrice; intPtrModified(a, b) {
-		log.Info("GasPrice changed by UI", "was", a, "is", b)
+	if g0, g1 := big.Int(original.Transaction.GasPrice), big.Int(new.Transaction.GasPrice); g0.Cmp(&g1) != 0 {
 		modified = true
-	}
-	if a, b := original.Transaction.MaxPriorityFeePerGas, new.Transaction.MaxPriorityFeePerGas; intPtrModified(a, b) {
-		log.Info("maxPriorityFeePerGas changed by UI", "was", a, "is", b)
-		modified = true
-	}
-	if a, b := original.Transaction.MaxFeePerGas, new.Transaction.MaxFeePerGas; intPtrModified(a, b) {
-		log.Info("maxFeePerGas changed by UI", "was", a, "is", b)
-		modified = true
+		log.Info("GasPrice changed by UI", "was", g0, "is", g1)
 	}
 	if v0, v1 := big.Int(original.Transaction.Value), big.Int(new.Transaction.Value); v0.Cmp(&v1) != 0 {
 		modified = true
@@ -540,7 +515,7 @@ func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, promp
 }
 
 // SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form
-func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
+func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
 	var (
 		err    error
 		result SignTxResponse
@@ -551,16 +526,8 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 	}
 	// If we are in 'rejectMode', then reject rather than show the user warnings
 	if api.rejectMode {
-		if err := msgs.GetWarnings(); err != nil {
+		if err := msgs.getWarnings(); err != nil {
 			return nil, err
-		}
-	}
-	if args.ChainID != nil {
-		requestedChainId := (*big.Int)(args.ChainID)
-		if api.chainID.Cmp(requestedChainId) != 0 {
-			log.Error("Signing request with wrong chain id", "requested", requestedChainId, "configured", api.chainID)
-			return nil, fmt.Errorf("requested chainid %d does not match the configuration of the signer",
-				requestedChainId)
 		}
 	}
 	req := SignTxRequest{
@@ -588,7 +555,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 		return nil, err
 	}
 	// Convert fields into a real transaction
-	var unsignedTx = result.Transaction.ToTransaction()
+	var unsignedTx = result.Transaction.toTransaction()
 	// Get the password for the transaction
 	pw, err := api.lookupOrQueryPassword(acc.Address, "Account password",
 		fmt.Sprintf("Please enter the password for account %s", acc.Address.String()))
@@ -602,44 +569,17 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 		return nil, err
 	}
 
-	data, err := signedTx.MarshalBinary()
+	rlpdata, err := rlp.EncodeToBytes(signedTx)
 	if err != nil {
 		return nil, err
 	}
-	response := ethapi.SignTransactionResult{Raw: data, Tx: signedTx}
+	response := ethapi.SignTransactionResult{Raw: rlpdata, Tx: signedTx}
 
 	// Finally, send the signed tx to the UI
 	api.UI.OnApprovedTx(response)
 	// ...and to the external caller
 	return &response, nil
 
-}
-
-func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error) {
-	// Do the usual validations, but on the last-stage transaction
-	args := gnosisTx.ArgsForValidation()
-	msgs, err := api.validator.ValidateTransaction(methodSelector, args)
-	if err != nil {
-		return nil, err
-	}
-	// If we are in 'rejectMode', then reject rather than show the user warnings
-	if api.rejectMode {
-		if err := msgs.GetWarnings(); err != nil {
-			return nil, err
-		}
-	}
-	typedData := gnosisTx.ToTypedData()
-	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
-	if err != nil {
-		return nil, err
-	}
-	checkSummedSender, _ := common.NewMixedcaseAddressFromString(signerAddress.Address().Hex())
-
-	gnosisTx.Signature = signature
-	gnosisTx.SafeTxHash = common.BytesToHash(preimage)
-	gnosisTx.Sender = *checkSummedSender // Must be checksumed to be accepted by relay
-
-	return &gnosisTx, nil
 }
 
 // Returns the external api version. This method does not require user acceptance. Available methods are

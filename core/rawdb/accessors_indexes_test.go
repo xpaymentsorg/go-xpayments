@@ -17,66 +17,38 @@
 package rawdb
 
 import (
-	"bytes"
-	"hash"
 	"math/big"
 	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"golang.org/x/crypto/sha3"
 )
-
-// testHasher is the helper tool for transaction/receipt list hashing.
-// The original hasher is trie, in order to get rid of import cycle,
-// use the testing hasher instead.
-type testHasher struct {
-	hasher hash.Hash
-}
-
-func newHasher() *testHasher {
-	return &testHasher{hasher: sha3.NewLegacyKeccak256()}
-}
-
-func (h *testHasher) Reset() {
-	h.hasher.Reset()
-}
-
-func (h *testHasher) Update(key, val []byte) {
-	h.hasher.Write(key)
-	h.hasher.Write(val)
-}
-
-func (h *testHasher) Hash() common.Hash {
-	return common.BytesToHash(h.hasher.Sum(nil))
-}
 
 // Tests that positional lookup metadata can be stored and retrieved.
 func TestLookupStorage(t *testing.T) {
 	tests := []struct {
-		name                        string
-		writeTxLookupEntriesByBlock func(ethdb.Writer, *types.Block)
+		name                 string
+		writeTxLookupEntries func(DatabaseWriter, *types.Block)
 	}{
 		{
 			"DatabaseV6",
-			func(db ethdb.Writer, block *types.Block) {
-				WriteTxLookupEntriesByBlock(db, block)
+			func(db DatabaseWriter, block *types.Block) {
+				WriteTxLookupEntries(db, block)
 			},
 		},
 		{
 			"DatabaseV4-V5",
-			func(db ethdb.Writer, block *types.Block) {
+			func(db DatabaseWriter, block *types.Block) {
 				for _, tx := range block.Transactions() {
-					db.Put(txLookupKey(tx.Hash()), block.Hash().Bytes())
+					db.Put(hashKey(lookupPrefix, tx.Hash()), block.Hash().Bytes())
 				}
 			},
 		},
 		{
 			"DatabaseV3",
-			func(db ethdb.Writer, block *types.Block) {
+			func(db DatabaseWriter, block *types.Block) {
 				for index, tx := range block.Transactions() {
 					entry := LegacyTxLookupEntry{
 						BlockHash:  block.Hash(),
@@ -84,7 +56,7 @@ func TestLookupStorage(t *testing.T) {
 						Index:      uint64(index),
 					}
 					data, _ := rlp.EncodeToBytes(entry)
-					db.Put(txLookupKey(tx.Hash()), data)
+					db.Put(hashKey(lookupPrefix, tx.Hash()), data)
 				}
 			},
 		},
@@ -92,14 +64,14 @@ func TestLookupStorage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			db := NewMemoryDatabase()
+			db := ethdb.NewMemDatabase()
 
 			tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
 			tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
 			tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
 			txs := []*types.Transaction{tx1, tx2, tx3}
 
-			block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, nil, newHasher())
+			block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, nil)
 
 			// Check that no transactions entries are in a pristine database
 			for i, tx := range txs {
@@ -110,7 +82,7 @@ func TestLookupStorage(t *testing.T) {
 			// Insert all the transactions into the database, and verify contents
 			WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 			WriteBlock(db, block)
-			tc.writeTxLookupEntriesByBlock(db, block)
+			tc.writeTxLookupEntries(db, block)
 
 			for i, tx := range txs {
 				if txn, hash, number, index := ReadTransaction(db, tx.Hash()); txn == nil {
@@ -133,38 +105,4 @@ func TestLookupStorage(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDeleteBloomBits(t *testing.T) {
-	// Prepare testing data
-	db := NewMemoryDatabase()
-	for i := uint(0); i < 2; i++ {
-		for s := uint64(0); s < 2; s++ {
-			WriteBloomBits(db, i, s, params.MainnetGenesisHash, []byte{0x01, 0x02})
-		}
-	}
-	check := func(bit uint, section uint64, head common.Hash, exist bool) {
-		bits, _ := ReadBloomBits(db, bit, section, head)
-		if exist && !bytes.Equal(bits, []byte{0x01, 0x02}) {
-			t.Fatalf("Bloombits mismatch")
-		}
-		if !exist && len(bits) > 0 {
-			t.Fatalf("Bloombits should be removed")
-		}
-	}
-	// Check the existence of written data.
-	check(0, 0, params.MainnetGenesisHash, true)
-
-	// Check the existence of deleted data.
-	DeleteBloombits(db, 0, 0, 1)
-	check(0, 0, params.MainnetGenesisHash, false)
-	check(0, 1, params.MainnetGenesisHash, true)
-
-	// Check the existence of deleted data.
-	DeleteBloombits(db, 0, 0, 2)
-	check(0, 0, params.MainnetGenesisHash, false)
-	check(0, 1, params.MainnetGenesisHash, false)
-	// Bit1 shouldn't be affect.
-	check(1, 0, params.MainnetGenesisHash, true)
-	check(1, 1, params.MainnetGenesisHash, true)
 }

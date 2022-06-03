@@ -33,14 +33,14 @@ type journalEntry interface {
 }
 
 // journal contains the list of state modifications applied since the last state
-// commit. These are tracked to be able to be reverted in the case of an execution
-// exception or request for reversal.
+// commit. These are tracked to be able to be reverted in case of an execution
+// exception or revertal request.
 type journal struct {
 	entries []journalEntry         // Current changes tracked by the journal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
 }
 
-// newJournal creates a new initialized journal.
+// newJournal create a new initialized journal.
 func newJournal() *journal {
 	return &journal{
 		dirties: make(map[common.Address]int),
@@ -90,8 +90,7 @@ type (
 		account *common.Address
 	}
 	resetObjectChange struct {
-		prev         *stateObject
-		prevdestruct bool
+		prev *stateObject
 	}
 	suicideChange struct {
 		account     *common.Address
@@ -113,8 +112,9 @@ type (
 		key, prevalue common.Hash
 	}
 	codeChange struct {
-		account            *common.Address
-		prevcode, prevhash []byte
+		account  *common.Address
+		prevcode []byte
+		prevhash common.Hash
 	}
 
 	// Changes to other state values.
@@ -128,15 +128,9 @@ type (
 		hash common.Hash
 	}
 	touchChange struct {
-		account *common.Address
-	}
-	// Changes to the access list
-	accessListAddAccountChange struct {
-		address *common.Address
-	}
-	accessListAddSlotChange struct {
-		address *common.Address
-		slot    *common.Hash
+		account   *common.Address
+		prev      bool
+		prevDirty bool
 	}
 )
 
@@ -151,9 +145,6 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
-	if !ch.prevdestruct && s.snap != nil {
-		delete(s.snapDestructs, ch.prev.addrHash)
-	}
 }
 
 func (ch resetObjectChange) dirtied() *common.Address {
@@ -161,8 +152,8 @@ func (ch resetObjectChange) dirtied() *common.Address {
 }
 
 func (ch suicideChange) revert(s *StateDB) {
-	obj := s.getStateObject(*ch.account)
-	if obj != nil {
+	obj, err := s.getStateObject(*ch.account)
+	if err != nil || obj != nil {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
 	}
@@ -182,7 +173,10 @@ func (ch touchChange) dirtied() *common.Address {
 }
 
 func (ch balanceChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setBalance(ch.prev)
+	so, err := s.getStateObject(*ch.account)
+	if err == nil {
+		so.setBalance(ch.prev)
+	}
 }
 
 func (ch balanceChange) dirtied() *common.Address {
@@ -190,7 +184,10 @@ func (ch balanceChange) dirtied() *common.Address {
 }
 
 func (ch nonceChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setNonce(ch.prev)
+	so, err := s.getStateObject(*ch.account)
+	if err == nil {
+		so.setNonce(ch.prev)
+	}
 }
 
 func (ch nonceChange) dirtied() *common.Address {
@@ -198,7 +195,10 @@ func (ch nonceChange) dirtied() *common.Address {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+	so, err := s.getStateObject(*ch.account)
+	if err == nil {
+		so.setCode(ch.prevhash, ch.prevcode)
+	}
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -206,7 +206,10 @@ func (ch codeChange) dirtied() *common.Address {
 }
 
 func (ch storageChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
+	so, err := s.getStateObject(*ch.account)
+	if err == nil {
+		so.setState(ch.key, ch.prevalue)
+	}
 }
 
 func (ch storageChange) dirtied() *common.Address {
@@ -240,30 +243,5 @@ func (ch addPreimageChange) revert(s *StateDB) {
 }
 
 func (ch addPreimageChange) dirtied() *common.Address {
-	return nil
-}
-
-func (ch accessListAddAccountChange) revert(s *StateDB) {
-	/*
-		One important invariant here, is that whenever a (addr, slot) is added, if the
-		addr is not already present, the add causes two journal entries:
-		- one for the address,
-		- one for the (address,slot)
-		Therefore, when unrolling the change, we can always blindly delete the
-		(addr) at this point, since no storage adds can remain when come upon
-		a single (addr) change.
-	*/
-	s.accessList.DeleteAddress(*ch.address)
-}
-
-func (ch accessListAddAccountChange) dirtied() *common.Address {
-	return nil
-}
-
-func (ch accessListAddSlotChange) revert(s *StateDB) {
-	s.accessList.DeleteSlot(*ch.address, *ch.slot)
-}
-
-func (ch accessListAddSlotChange) dirtied() *common.Address {
 	return nil
 }

@@ -23,12 +23,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/pborman/uuid"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
@@ -109,10 +110,7 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	}
 
 	u := new(uuid.UUID)
-	*u, err = uuid.Parse(keyJSON.Id)
-	if err != nil {
-		return err
-	}
+	*u = uuid.Parse(keyJSON.Id)
 	k.Id = *u
 	addr, err := hex.DecodeString(keyJSON.Address)
 	if err != nil {
@@ -130,10 +128,7 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 }
 
 func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
-	id, err := uuid.NewRandom()
-	if err != nil {
-		panic(fmt.Sprintf("Could not create random uuid: %v", err))
-	}
+	id := uuid.NewRandom()
 	key := &Key{
 		Id:         id,
 		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
@@ -196,7 +191,7 @@ func writeTemporaryKeyFile(file string, content []byte) (string, error) {
 	}
 	// Atomic write: create a temporary hidden file first
 	// then move it into place. TempFile assigns mode 0600.
-	f, err := os.CreateTemp(filepath.Dir(file), "."+filepath.Base(file)+".tmp")
+	f, err := ioutil.TempFile(filepath.Dir(file), "."+filepath.Base(file)+".tmp")
 	if err != nil {
 		return "", err
 	}
@@ -232,6 +227,5 @@ func toISO8601(t time.Time) string {
 	} else {
 		tz = fmt.Sprintf("%03d00", offset/3600)
 	}
-	return fmt.Sprintf("%04d-%02d-%02dT%02d-%02d-%02d.%09d%s",
-		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), tz)
+	return fmt.Sprintf("%04d-%02d-%02dT%02d-%02d-%02d.%09d%s", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), tz)
 }

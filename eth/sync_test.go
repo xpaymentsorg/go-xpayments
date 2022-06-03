@@ -22,75 +22,34 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/eth/protocols/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/protocols/snap"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 )
 
-// Tests that snap sync is disabled after a successful sync cycle.
-func TestSnapSyncDisabling66(t *testing.T) { testSnapSyncDisabling(t, eth.ETH66, snap.SNAP1) }
-
-// Tests that snap sync gets disabled as soon as a real block is successfully
+// Tests that fast sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
-func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
-	t.Parallel()
-
-	// Create an empty handler and ensure it's in snap sync mode
-	empty := newTestHandler()
-	if atomic.LoadUint32(&empty.handler.snapSync) == 0 {
-		t.Fatalf("snap sync disabled on pristine blockchain")
+func TestFastSyncDisabling(t *testing.T) {
+	// Create a pristine protocol manager, check that fast sync is left enabled
+	pmEmpty, _ := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
+	if atomic.LoadUint32(&pmEmpty.fastSync) == 0 {
+		t.Fatalf("fast sync disabled on pristine blockchain")
 	}
-	defer empty.close()
-
-	// Create a full handler and ensure snap sync ends up disabled
-	full := newTestHandlerWithBlocks(1024)
-	if atomic.LoadUint32(&full.handler.snapSync) == 1 {
-		t.Fatalf("snap sync not disabled on non-empty blockchain")
+	// Create a full protocol manager, check that fast sync gets disabled
+	pmFull, _ := newTestProtocolManagerMust(t, downloader.FastSync, 1024, nil, nil)
+	if atomic.LoadUint32(&pmFull.fastSync) == 1 {
+		t.Fatalf("fast sync not disabled on non-empty blockchain")
 	}
-	defer full.close()
+	// Sync up the two peers
+	io1, io2 := p2p.MsgPipe()
 
-	// Sync up the two handlers via both `eth` and `snap`
-	caps := []p2p.Cap{{Name: "eth", Version: ethVer}, {Name: "snap", Version: snapVer}}
+	go pmFull.handle(pmFull.newPeer(63, p2p.NewPeer(discover.NodeID{}, "empty", nil), io2))
+	go pmEmpty.handle(pmEmpty.newPeer(63, p2p.NewPeer(discover.NodeID{}, "full", nil), io1))
 
-	emptyPipeEth, fullPipeEth := p2p.MsgPipe()
-	defer emptyPipeEth.Close()
-	defer fullPipeEth.Close()
-
-	emptyPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool)
-	fullPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool)
-	defer emptyPeerEth.Close()
-	defer fullPeerEth.Close()
-
-	go empty.handler.runEthPeer(emptyPeerEth, func(peer *eth.Peer) error {
-		return eth.Handle((*ethHandler)(empty.handler), peer)
-	})
-	go full.handler.runEthPeer(fullPeerEth, func(peer *eth.Peer) error {
-		return eth.Handle((*ethHandler)(full.handler), peer)
-	})
-
-	emptyPipeSnap, fullPipeSnap := p2p.MsgPipe()
-	defer emptyPipeSnap.Close()
-	defer fullPipeSnap.Close()
-
-	emptyPeerSnap := snap.NewPeer(snapVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeSnap)
-	fullPeerSnap := snap.NewPeer(snapVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeSnap)
-
-	go empty.handler.runSnapExtension(emptyPeerSnap, func(peer *snap.Peer) error {
-		return snap.Handle((*snapHandler)(empty.handler), peer)
-	})
-	go full.handler.runSnapExtension(fullPeerSnap, func(peer *snap.Peer) error {
-		return snap.Handle((*snapHandler)(full.handler), peer)
-	})
-	// Wait a bit for the above handlers to start
 	time.Sleep(250 * time.Millisecond)
+	pmEmpty.synchronise(pmEmpty.peers.BestPeer())
 
-	// Check that snap sync was disabled
-	op := peerToSyncOp(downloader.SnapSync, empty.handler.peers.peerWithHighestTD())
-	if err := empty.handler.doSync(op); err != nil {
-		t.Fatal("sync failed:", err)
-	}
-	if atomic.LoadUint32(&empty.handler.snapSync) == 1 {
-		t.Fatalf("snap sync not disabled after successful synchronisation")
+	// Check that fast sync was disabled
+	if atomic.LoadUint32(&pmEmpty.fastSync) == 1 {
+		t.Fatalf("fast sync not disabled after successful synchronisation")
 	}
 }

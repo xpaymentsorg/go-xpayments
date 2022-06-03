@@ -23,18 +23,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/common/math"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 )
@@ -44,29 +42,26 @@ type BlockTest struct {
 	json btJSON
 }
 
-// UnmarshalJSON implements json.Unmarshaler interface.
 func (t *BlockTest) UnmarshalJSON(in []byte) error {
 	return json.Unmarshal(in, &t.json)
 }
 
 type btJSON struct {
-	Blocks     []btBlock             `json:"blocks"`
-	Genesis    btHeader              `json:"genesisBlockHeader"`
-	Pre        core.GenesisAlloc     `json:"pre"`
-	Post       core.GenesisAlloc     `json:"postState"`
-	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
-	Network    string                `json:"network"`
-	SealEngine string                `json:"sealEngine"`
+	Blocks    []btBlock             `json:"blocks"`
+	Genesis   btHeader              `json:"genesisBlockHeader"`
+	Pre       core.GenesisAlloc     `json:"pre"`
+	Post      core.GenesisAlloc     `json:"postState"`
+	BestBlock common.UnprefixedHash `json:"lastblockhash"`
+	Network   string                `json:"network"`
 }
 
 type btBlock struct {
-	BlockHeader     *btHeader
-	ExpectException string
-	Rlp             string
-	UncleHeaders    []*btHeader
+	BlockHeader  *btHeader
+	Rlp          string
+	UncleHeaders []*btHeader
 }
 
-//go:generate go run github.com/fjl/gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
+//go:generate gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
 
 type btHeader struct {
 	Bloom            types.Bloom
@@ -84,50 +79,38 @@ type btHeader struct {
 	Difficulty       *big.Int
 	GasLimit         uint64
 	GasUsed          uint64
-	Timestamp        uint64
-	BaseFeePerGas    *big.Int
+	Timestamp        *big.Int
 }
 
 type btHeaderMarshaling struct {
-	ExtraData     hexutil.Bytes
-	Number        *math.HexOrDecimal256
-	Difficulty    *math.HexOrDecimal256
-	GasLimit      math.HexOrDecimal64
-	GasUsed       math.HexOrDecimal64
-	Timestamp     math.HexOrDecimal64
-	BaseFeePerGas *math.HexOrDecimal256
+	ExtraData  hexutil.Bytes
+	Number     *math.HexOrDecimal256
+	Difficulty *math.HexOrDecimal256
+	GasLimit   math.HexOrDecimal64
+	GasUsed    math.HexOrDecimal64
+	Timestamp  *math.HexOrDecimal256
 }
 
-func (t *BlockTest) Run(snapshotter bool) error {
+func (t *BlockTest) Run() error {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
 
 	// import pre accounts & construct test genesis block & state root
-	db := rawdb.NewMemoryDatabase()
+	db := ethdb.NewMemDatabase()
 	gblock, err := t.genesis(config).Commit(db)
 	if err != nil {
 		return err
 	}
 	if gblock.Hash() != t.json.Genesis.Hash {
-		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x", gblock.Hash().Bytes()[:6], t.json.Genesis.Hash[:6])
+		return fmt.Errorf("genesis block hash doesn't match test: computed=%x, test=%x\n", gblock.Hash().Bytes()[:6], t.json.Genesis.Hash[:6])
 	}
 	if gblock.Root() != t.json.Genesis.StateRoot {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
-	var engine consensus.Engine
-	if t.json.SealEngine == "NoProof" {
-		engine = ethash.NewFaker()
-	} else {
-		engine = ethash.NewShared()
-	}
-	cache := &core.CacheConfig{TrieCleanLimit: 0}
-	if snapshotter {
-		cache.SnapshotLimit = 1
-		cache.SnapshotWait = true
-	}
-	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil, nil)
+
+	chain, err := core.NewBlockChain(db, nil, config, clique.New(params.DefaultCliqueConfig(), db), vm.Config{})
 	if err != nil {
 		return err
 	}
@@ -148,12 +131,6 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	if err = t.validatePostState(newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
-	// Cross-check the snapshot-to-hash against the trie hash
-	if snapshotter {
-		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root()); err != nil {
-			return err
-		}
-	}
 	return t.validateImportedHeaders(chain, validBlocks)
 }
 
@@ -161,7 +138,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
 		Config:     config,
 		Nonce:      t.json.Genesis.Nonce.Uint64(),
-		Timestamp:  t.json.Genesis.Timestamp,
+		Timestamp:  t.json.Genesis.Timestamp.Uint64(),
 		ParentHash: t.json.Genesis.ParentHash,
 		ExtraData:  t.json.Genesis.ExtraData,
 		GasLimit:   t.json.Genesis.GasLimit,
@@ -170,7 +147,6 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		Mixhash:    t.json.Genesis.MixHash,
 		Coinbase:   t.json.Genesis.Coinbase,
 		Alloc:      t.json.Pre,
-		BaseFee:    t.json.Genesis.BaseFeePerGas,
 	}
 }
 
@@ -189,13 +165,13 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
-	for bi, b := range t.json.Blocks {
+	for _, b := range t.json.Blocks {
 		cb, err := b.decode()
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return nil, fmt.Errorf("block RLP decoding failed when expected to succeed: %v", err)
+				return nil, fmt.Errorf("Block RLP decoding failed when expected to succeed: %v", err)
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
@@ -205,21 +181,16 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return nil, fmt.Errorf("block #%v insertion into chain failed: %v", blocks[i].Number(), err)
+				return nil, fmt.Errorf("Block #%v insertion into chain failed: %v", blocks[i].Number(), err)
 			}
 		}
 		if b.BlockHeader == nil {
-			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
-					bi, b.ExpectException, string(data))
-			}
-			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
-				bi, b.ExpectException)
+			return nil, fmt.Errorf("Block insertion should have failed")
 		}
 
 		// validate RLP decoding by checking all values against test file JSON
 		if err = validateHeader(b.BlockHeader, cb.Header()); err != nil {
-			return nil, fmt.Errorf("deserialised block header validation failed: %v", err)
+			return nil, fmt.Errorf("Deserialised block header validation failed: %v", err)
 		}
 		validBlocks = append(validBlocks, b)
 	}
@@ -228,49 +199,49 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 
 func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Bloom != h2.Bloom {
-		return fmt.Errorf("bloom: want: %x have: %x", h.Bloom, h2.Bloom)
+		return fmt.Errorf("Bloom: want: %x have: %x", h.Bloom, h2.Bloom)
 	}
 	if h.Coinbase != h2.Coinbase {
-		return fmt.Errorf("coinbase: want: %x have: %x", h.Coinbase, h2.Coinbase)
+		return fmt.Errorf("Coinbase: want: %x have: %x", h.Coinbase, h2.Coinbase)
 	}
 	if h.MixHash != h2.MixDigest {
 		return fmt.Errorf("MixHash: want: %x have: %x", h.MixHash, h2.MixDigest)
 	}
 	if h.Nonce != h2.Nonce {
-		return fmt.Errorf("nonce: want: %x have: %x", h.Nonce, h2.Nonce)
+		return fmt.Errorf("Nonce: want: %x have: %x", h.Nonce, h2.Nonce)
 	}
 	if h.Number.Cmp(h2.Number) != 0 {
-		return fmt.Errorf("number: want: %v have: %v", h.Number, h2.Number)
+		return fmt.Errorf("Number: want: %v have: %v", h.Number, h2.Number)
 	}
 	if h.ParentHash != h2.ParentHash {
-		return fmt.Errorf("parent hash: want: %x have: %x", h.ParentHash, h2.ParentHash)
+		return fmt.Errorf("Parent hash: want: %x have: %x", h.ParentHash, h2.ParentHash)
 	}
 	if h.ReceiptTrie != h2.ReceiptHash {
-		return fmt.Errorf("receipt hash: want: %x have: %x", h.ReceiptTrie, h2.ReceiptHash)
+		return fmt.Errorf("Receipt hash: want: %x have: %x", h.ReceiptTrie, h2.ReceiptHash)
 	}
 	if h.TransactionsTrie != h2.TxHash {
-		return fmt.Errorf("tx hash: want: %x have: %x", h.TransactionsTrie, h2.TxHash)
+		return fmt.Errorf("Tx hash: want: %x have: %x", h.TransactionsTrie, h2.TxHash)
 	}
 	if h.StateRoot != h2.Root {
-		return fmt.Errorf("state hash: want: %x have: %x", h.StateRoot, h2.Root)
+		return fmt.Errorf("State hash: want: %x have: %x", h.StateRoot, h2.Root)
 	}
 	if h.UncleHash != h2.UncleHash {
-		return fmt.Errorf("uncle hash: want: %x have: %x", h.UncleHash, h2.UncleHash)
+		return fmt.Errorf("Uncle hash: want: %x have: %x", h.UncleHash, h2.UncleHash)
 	}
 	if !bytes.Equal(h.ExtraData, h2.Extra) {
-		return fmt.Errorf("extra data: want: %x have: %x", h.ExtraData, h2.Extra)
+		return fmt.Errorf("Extra data: want: %x have: %x", h.ExtraData, h2.Extra)
 	}
 	if h.Difficulty.Cmp(h2.Difficulty) != 0 {
-		return fmt.Errorf("difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
+		return fmt.Errorf("Difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
 	}
 	if h.GasLimit != h2.GasLimit {
-		return fmt.Errorf("gasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)
+		return fmt.Errorf("GasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)
 	}
 	if h.GasUsed != h2.GasUsed {
-		return fmt.Errorf("gasUsed: want: %d have: %d", h.GasUsed, h2.GasUsed)
+		return fmt.Errorf("GasUsed: want: %d have: %d", h.GasUsed, h2.GasUsed)
 	}
-	if h.Timestamp != h2.Time {
-		return fmt.Errorf("timestamp: want: %v have: %v", h.Timestamp, h2.Time)
+	if h.Timestamp.Cmp(h2.Time) != 0 {
+		return fmt.Errorf("Timestamp: want: %v have: %v", h.Timestamp, h2.Time)
 	}
 	return nil
 }
@@ -308,7 +279,7 @@ func (t *BlockTest) validateImportedHeaders(cm *core.BlockChain, validBlocks []b
 	// be part of the longest chain until last block is imported.
 	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
 		if err := validateHeader(bmap[b.Hash()].BlockHeader, b.Header()); err != nil {
-			return fmt.Errorf("imported block header validation failed: %v", err)
+			return fmt.Errorf("Imported block header validation failed: %v", err)
 		}
 	}
 	return nil

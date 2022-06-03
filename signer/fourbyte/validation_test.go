@@ -22,7 +22,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
-	"github.com/xpaymentsorg/go-xpayments/signer/core/apitypes"
+	"github.com/xpaymentsorg/go-xpayments/signer/core"
 )
 
 func mixAddr(a string) (*common.MixedcaseAddress, error) {
@@ -36,7 +36,7 @@ func toHexUint(h string) hexutil.Uint64 {
 	b := big.NewInt(0).SetBytes(common.FromHex(h))
 	return hexutil.Uint64(b.Uint64())
 }
-func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
+func dummyTxArgs(t txtestcase) *core.SendTxArgs {
 	to, _ := mixAddr(t.to)
 	from, _ := mixAddr(t.from)
 	n := toHexUint(t.n)
@@ -55,12 +55,12 @@ func dummyTxArgs(t txtestcase) *apitypes.SendTxArgs {
 		input = &a
 
 	}
-	return &apitypes.SendTxArgs{
+	return &core.SendTxArgs{
 		From:     *from,
 		To:       to,
 		Value:    value,
 		Nonce:    n,
-		GasPrice: &gasPrice,
+		GasPrice: gasPrice,
 		Gas:      gas,
 		Data:     data,
 		Input:    input,

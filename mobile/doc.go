@@ -24,7 +24,7 @@
 //
 // Since gomobile cannot bridge arbitrary types between Go and Android/iOS, the
 // exposed APIs need to be manually wrapped into simplified types, with custom
-// constructors and getters/setters to ensure that they can be meaningfully used
+// constructors and getters/setters to ensure that they can be meaninfully used
 // from Java/ObjC too.
 //
 // With this in mind, please try to limit the scope of this package and only add
@@ -58,4 +58,4 @@
 // Note, a panic *cannot* cross over language boundaries, instead will result in
 // an undebuggable SEGFAULT in the process. For error handling only ever use error
 // returns, which may be the only or the second return.
-package geth
+package gpay

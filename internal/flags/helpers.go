@@ -1,18 +1,18 @@
 // Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// This file is part of go-ethereum.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package flags
 
@@ -21,11 +21,11 @@ import (
 	"path/filepath"
 
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
-	CommandHelpTemplate = `{{.cmd.Name}}{{if .cmd.Subcommands}} command{{end}}{{if .cmd.Flags}} [command options]{{end}} {{.cmd.ArgsUsage}}
+	CommandHelpTemplate = `{{.cmd.Name}}{{if .cmd.Subcommands}} command{{end}}{{if .cmd.Flags}} [command options]{{end}} [arguments...]
 {{if .cmd.Description}}{{.cmd.Description}}
 {{end}}{{if .cmd.Subcommands}}
 SUBCOMMANDS:
@@ -36,7 +36,7 @@ SUBCOMMANDS:
 {{end}}
 {{end}}{{end}}`
 
-	OriginCommandHelpTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} {{.ArgsUsage}}
+	OriginCommandHelpTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} [arguments...]
 {{if .Description}}{{.Description}}
 {{end}}{{if .Subcommands}}
 SUBCOMMANDS:
@@ -54,7 +54,7 @@ OPTIONS:
    Copyright 2021-2022 The go-xpayments Authors
 
 USAGE:
-   {{.App.HelpName}} [options]{{if .App.Commands}} [command] [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
+   {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
    {{if .App.Version}}
 VERSION:
    {{.App.Version}}
@@ -107,7 +107,7 @@ type FlagGroup struct {
 	Flags []cli.Flag
 }
 
-// ByCategory sorts an array of FlagGroup by Name in the order
+// byCategory sorts an array of FlagGroup by Name in the order
 // defined in AppHelpFlagGroups.
 type ByCategory []FlagGroup
 
@@ -143,11 +143,10 @@ func FlagCategory(flag cli.Flag, flagGroups []FlagGroup) string {
 // NewApp creates an app with sane defaults.
 func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app := cli.NewApp()
-	app.EnableBashCompletion = true
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
 	app.Email = ""
-	app.Version = params.VersionWithCommit(gitCommit, gitDate)
+	app.Version = params.VersionWithCommit(gitCommit)
 	app.Usage = usage
 	return app
 }

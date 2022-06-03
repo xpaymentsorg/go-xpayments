@@ -25,7 +25,6 @@ import (
 
 	"github.com/karalabe/usb"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
-	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/log"
 )
 
@@ -52,11 +51,10 @@ type Hub struct {
 	endpointID int                     // USB endpoint identifier used for non-macOS device discovery
 	makeDriver func(log.Logger) driver // Factory method to construct a vendor specific driver
 
-	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
-	wallets     []accounts.Wallet       // List of USB wallet devices currently tracking
-	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
-	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
-	updating    bool                    // Whether the event notification loop is running
+	refreshed  time.Time           // Time instance when the list of wallets was last refreshed
+	wallets    []accounts.Wallet   // List of USB wallet devices currently tracking
+	updateFeed accounts.WalletFeed // Event feed to notify wallet additions/removals
+	updating   bool                // Whether the event notification loop is running
 
 	quit chan chan error
 
@@ -240,20 +238,23 @@ func (hub *Hub) refreshWallets() {
 
 // Subscribe implements accounts.Backend, creating an async subscription to
 // receive notifications on the addition or removal of USB wallets.
-func (hub *Hub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
+func (hub *Hub) Subscribe(sink chan<- accounts.WalletEvent, name string) {
 	// We need the mutex to reliably start/stop the update loop
 	hub.stateLock.Lock()
 	defer hub.stateLock.Unlock()
 
 	// Subscribe the caller and track the subscriber count
-	sub := hub.updateScope.Track(hub.updateFeed.Subscribe(sink))
+	hub.updateFeed.Subscribe(sink, name)
 
 	// Subscribers require an active notification loop, start it
 	if !hub.updating {
 		hub.updating = true
 		go hub.updater()
 	}
-	return sub
+}
+
+func (hub *Hub) Unsubscribe(sink chan<- accounts.WalletEvent) {
+	hub.updateFeed.Unsubscribe(sink)
 }
 
 // updater is responsible for maintaining an up-to-date list of wallets managed
@@ -269,7 +270,7 @@ func (hub *Hub) updater() {
 
 		// If all our subscribers left, stop the updater
 		hub.stateLock.Lock()
-		if hub.updateScope.Count() == 0 {
+		if hub.updateFeed.Len() == 0 {
 			hub.updating = false
 			hub.stateLock.Unlock()
 			return

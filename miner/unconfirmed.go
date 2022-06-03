@@ -50,7 +50,7 @@ type unconfirmedBlocks struct {
 	chain  chainRetriever // Blockchain to verify canonical status through
 	depth  uint           // Depth after which to discard previous blocks
 	blocks *ring.Ring     // Block infos to allow canonical chain cross checks
-	lock   sync.Mutex     // Protects the fields from concurrent access
+	lock   sync.RWMutex   // Protects the fields from concurrent access
 }
 
 // newUnconfirmedBlocks returns new data structure to track currently unconfirmed blocks.
@@ -106,23 +106,7 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 		case header.Hash() == next.hash:
 			log.Info("🔗 block reached canonical chain", "number", next.index, "hash", next.hash)
 		default:
-			// Block is not canonical, check whether we have an uncle or a lost block
-			included := false
-			for number := next.index; !included && number < next.index+uint64(set.depth) && number <= height; number++ {
-				if block := set.chain.GetBlockByNumber(number); block != nil {
-					for _, uncle := range block.Uncles() {
-						if uncle.Hash() == next.hash {
-							included = true
-							break
-						}
-					}
-				}
-			}
-			if included {
-				log.Info("⑂ block became an uncle", "number", next.index, "hash", next.hash)
-			} else {
-				log.Info("😱 block lost", "number", next.index, "hash", next.hash)
-			}
+			log.Debug("Block did not reach canonical chain", "number", next.index, "hash", next.hash)
 		}
 		// Drop the block out of the ring
 		if set.blocks.Value == set.blocks.Next().Value {

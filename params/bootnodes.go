@@ -16,41 +16,15 @@
 
 package params
 
-import "github.com/xpaymentsorg/go-xpayments/common"
-
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main xPayments network.
 var MainnetBootnodes = []string{
 	// xPayments Foundation Go Bootnodes
-	"enode://b2fa0155c7c4bb0921765de2753c46424f53b01b00ba1fbccff632cfb2a7ed4fe32406e4e176fb58cd92f68c4de2a062f9181558987cd6039a3557b9ef48c8ed@194.195.210.119:30340", // BR
+	"enode://b2fa0155c7c4bb0921765de2753c46424f53b01b00ba1fbccff632cfb2a7ed4fe32406e4e176fb58cd92f68c4de2a062f9181558987cd6039a3557b9ef48c8ed@177.74.220.127:30340", // BR
 }
 
-// BerylliumBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Beryllium test network.
-var BerylliumBootnodes = []string{
-	// Beryllium Initiative bootnodes
-	"", // BR
-}
-
-var V5Bootnodes = []string{
-	// xPayments team's bootnode
+// TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// the testnet Beryllium network.
+var TestnetBootnodes = []string{
 	"",
-}
-
-const dnsPrefix = "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@"
-
-// KnownDNSNetwork returns the address of a public DNS-based node list for the given
-// genesis hash and protocol. See https://github.com/ethereum/discv4-dns-lists for more
-// information.
-func KnownDNSNetwork(genesis common.Hash, protocol string) string {
-	var net string
-	switch genesis {
-	case MainnetGenesisHash:
-		net = "mainnet"
-	case BerylliumGenesisHash:
-		net = "beryllium"
-	default:
-		return ""
-	}
-	return dnsPrefix + protocol + "." + net + ".ethdisco.net"
 }

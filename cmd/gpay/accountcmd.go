@@ -18,24 +18,24 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io/ioutil"
 
+	"github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/log"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (
 	walletCommand = cli.Command{
 		Name:      "wallet",
-		Usage:     "Manage xPayments presale wallets",
+		Usage:     "Manage Ethereum presale wallets",
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
-    gpay wallet import /path/to/my/presale.wallet
+    geth wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -44,7 +44,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 			{
 
 				Name:      "import",
-				Usage:     "Import xPayments presale wallet",
+				Usage:     "Import Ethereum presale wallet",
 				ArgsUsage: "<keyFile>",
 				Action:    utils.MigrateFlags(importWallet),
 				Category:  "ACCOUNT COMMANDS",
@@ -55,7 +55,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-	gpay wallet [options] /path/to/my/presale.wallet
+	geth wallet [options] /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -85,7 +85,7 @@ Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under <DATADIR>/keystore.
 It is safe to transfer the entire directory or the individual keys therein
-between xpayments nodes by simply copying.
+between ethereum nodes by simply copying.
 
 Make sure you backup your keys regularly.`,
 		Subcommands: []cli.Command{
@@ -111,7 +111,7 @@ Print a short summary of all accounts`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-    gpay account new
+    geth account new
 
 Creates a new account and prints the address.
 
@@ -136,7 +136,7 @@ password to file or expose in any other way.
 					utils.LightKDFFlag,
 				},
 				Description: `
-    gpay account update <address>
+    geth account update <address>
 
 Update an existing account.
 
@@ -148,7 +148,7 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the password can be specified with the --password flag:
 
-    gpay account update [options] <address>
+    geth account update [options] <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
@@ -166,7 +166,7 @@ changing your password is only possible interactively.
 				},
 				ArgsUsage: "<keyFile>",
 				Description: `
-    gpay account import <keyfile>
+    geth account import <keyfile>
 
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
@@ -179,10 +179,10 @@ You must remember this password to unlock your account in the future.
 
 For non-interactive use the password can be specified with the -password flag:
 
-    gpay account import [options] <keyfile>
+    geth account import [options] <keyfile>
 
 Note:
-As you can directly copy your encrypted accounts to another xpayments instance,
+As you can directly copy your encrypted accounts to another ethereum instance,
 this import mechanism is not needed when you transfer an account between
 nodes.
 `,
@@ -204,7 +204,7 @@ func accountList(ctx *cli.Context) error {
 }
 
 // tries unlocking the specified account a few times.
-func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
+func unlockAccount(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(ks, address)
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
@@ -268,15 +268,10 @@ func accountCreate(ctx *cli.Context) error {
 		}
 	}
 	utils.SetNodeConfig(ctx, &cfg.Node)
-	keydir, err := cfg.Node.KeyDirConfig()
+	scryptN, scryptP, keydir, err := cfg.Node.AccountConfig()
+
 	if err != nil {
 		utils.Fatalf("Failed to read configuration: %v", err)
-	}
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	if cfg.Node.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
 	}
 
 	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
@@ -306,7 +301,7 @@ func accountUpdate(ctx *cli.Context) error {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	for _, addr := range ctx.Args() {
-		account, oldPassword := unlockAccount(ks, addr, 0, nil)
+		account, oldPassword := unlockAccount(ctx, ks, addr, 0, nil)
 		newPassword := utils.GetPassPhraseWithList("Please give a new password. Do not forget this password.", true, 0, nil)
 		if err := ks.Update(account, oldPassword, newPassword); err != nil {
 			utils.Fatalf("Could not update the account: %v", err)
@@ -320,7 +315,7 @@ func importWallet(ctx *cli.Context) error {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	keyJSON, err := os.ReadFile(keyfile)
+	keyJson, err := ioutil.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
@@ -329,7 +324,7 @@ func importWallet(ctx *cli.Context) error {
 	passphrase := utils.GetPassPhraseWithList("", false, 0, utils.MakePasswordList(ctx))
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
+	acct, err := ks.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}

@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -26,14 +26,14 @@ import (
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.
-func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (*http.Server, net.Addr, error) {
+func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.Handler) (net.Listener, error) {
 	// start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
 	)
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	// make sure timeout values are meaningful
 	CheckTimeouts(&timeouts)
@@ -45,7 +45,22 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 		IdleTimeout:  timeouts.IdleTimeout,
 	}
 	go httpSrv.Serve(listener)
-	return httpSrv, listener.Addr(), err
+	return listener, err
+}
+
+// startWSEndpoint starts a websocket endpoint.
+func startWSEndpoint(endpoint string, handler http.Handler) (net.Listener, error) {
+	// start the HTTP listener
+	var (
+		listener net.Listener
+		err      error
+	)
+	if listener, err = net.Listen("tcp", endpoint); err != nil {
+		return nil, err
+	}
+	wsSrv := &http.Server{Handler: handler}
+	go wsSrv.Serve(listener)
+	return listener, err
 }
 
 // checkModuleAvailability checks that all names given in modules are actually
@@ -60,10 +75,8 @@ func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available [
 		}
 	}
 	for _, name := range modules {
-		if _, ok := availableSet[name]; !ok {
-			if name != rpc.MetadataApi && name != rpc.EngineApi {
-				bad = append(bad, name)
-			}
+		if _, ok := availableSet[name]; !ok && name != rpc.MetadataApi {
+			bad = append(bad, name)
 		}
 	}
 	return bad, available

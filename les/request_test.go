@@ -24,55 +24,56 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/light"
 )
 
-var testBankSecureTrieKey = secAddr(bankAddr)
+var testBankSecureTrieKey = secAddr(testBankAddress)
 
 func secAddr(addr common.Address) []byte {
 	return crypto.Keccak256(addr[:])
 }
 
-type accessTestFn func(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest
+type accessTestFn func(db common.Database, bhash common.Hash, number uint64) light.OdrRequest
+
+func TestBlockAccessLes1(t *testing.T) { testAccess(t, 1, tfBlockAccess) }
 
 func TestBlockAccessLes2(t *testing.T) { testAccess(t, 2, tfBlockAccess) }
-func TestBlockAccessLes3(t *testing.T) { testAccess(t, 3, tfBlockAccess) }
-func TestBlockAccessLes4(t *testing.T) { testAccess(t, 4, tfBlockAccess) }
 
-func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func tfBlockAccess(db common.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.BlockRequest{Hash: bhash, Number: number}
 }
 
-func TestReceiptsAccessLes2(t *testing.T) { testAccess(t, 2, tfReceiptsAccess) }
-func TestReceiptsAccessLes3(t *testing.T) { testAccess(t, 3, tfReceiptsAccess) }
-func TestReceiptsAccessLes4(t *testing.T) { testAccess(t, 4, tfReceiptsAccess) }
+func TestReceiptsAccessLes1(t *testing.T) { testAccess(t, 1, tfReceiptsAccess) }
 
-func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func TestReceiptsAccessLes2(t *testing.T) { testAccess(t, 2, tfReceiptsAccess) }
+
+func tfReceiptsAccess(db common.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.ReceiptsRequest{Hash: bhash, Number: number}
 }
 
-func TestTrieEntryAccessLes2(t *testing.T) { testAccess(t, 2, tfTrieEntryAccess) }
-func TestTrieEntryAccessLes3(t *testing.T) { testAccess(t, 3, tfTrieEntryAccess) }
-func TestTrieEntryAccessLes4(t *testing.T) { testAccess(t, 4, tfTrieEntryAccess) }
+func TestTrieEntryAccessLes1(t *testing.T) { testAccess(t, 1, tfTrieEntryAccess) }
 
-func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
-	if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash, *number)), Key: testBankSecureTrieKey}
+func TestTrieEntryAccessLes2(t *testing.T) { testAccess(t, 2, tfTrieEntryAccess) }
+
+func tfTrieEntryAccess(db common.Database, bhash common.Hash, number uint64) light.OdrRequest {
+	if number := rawdb.ReadHeaderNumber(db.GlobalTable(), bhash); number != nil {
+		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db.HeaderTable(), bhash, *number)), Key: testBankSecureTrieKey}
 	}
 	return nil
 }
 
-func TestCodeAccessLes2(t *testing.T) { testAccess(t, 2, tfCodeAccess) }
-func TestCodeAccessLes3(t *testing.T) { testAccess(t, 3, tfCodeAccess) }
-func TestCodeAccessLes4(t *testing.T) { testAccess(t, 4, tfCodeAccess) }
+func TestCodeAccessLes1(t *testing.T) { testAccess(t, 1, tfCodeAccess) }
 
-func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrRequest {
-	number := rawdb.ReadHeaderNumber(db, bhash)
+func TestCodeAccessLes2(t *testing.T) { testAccess(t, 2, tfCodeAccess) }
+
+func tfCodeAccess(db common.Database, bhash common.Hash, num uint64) light.OdrRequest {
+	number := rawdb.ReadHeaderNumber(db.GlobalTable(), bhash)
 	if number != nil {
 		return nil
 	}
-	header := rawdb.ReadHeader(db, bhash, *number)
+	header := rawdb.ReadHeader(db.HeaderTable(), bhash, *number)
 	if header.Number.Uint64() < testContractDeployed {
 		return nil
 	}
@@ -83,30 +84,34 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 
 func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	// Assemble the test environment
-	netconfig := testnetConfig{
-		blocks:    4,
-		protocol:  protocol,
-		indexFn:   nil,
-		connect:   true,
-		nopruning: true,
-	}
-	server, client, tearDown := newClientServerEnv(t, netconfig)
-	defer tearDown()
+	peers := newPeerSet()
+	dist := newRequestDistributor(peers, make(chan struct{}))
+	rm := newRetrieveManager(peers, dist, nil)
+	db := ethdb.NewMemDatabase()
+	ldb := ethdb.NewMemDatabase()
+	odr := NewLesOdr(ldb, light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency), rm)
 
-	// Ensure the client has synced all necessary data.
-	clientHead := client.handler.backend.blockchain.CurrentHeader()
-	if clientHead.Number.Uint64() != 4 {
-		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
+	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)
+	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
+	select {
+	case <-time.After(time.Millisecond * 100):
+	case err := <-err1:
+		t.Fatalf("peer 1 handshake error: %v", err)
+	case err := <-err2:
+		t.Fatalf("peer 1 handshake error: %v", err)
 	}
+
+	lpm.synchronise(lpeer)
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
-			bhash := rawdb.ReadCanonicalHash(server.db, i)
-			if req := fn(client.db, bhash, i); req != nil {
+		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
+			bhash := rawdb.ReadCanonicalHash(db, i)
+			if req := fn(ldb, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-				err := client.handler.backend.odr.Retrieve(ctx, req)
-				cancel()
+				defer cancel()
 
+				err := odr.Retrieve(ctx, req)
 				got := err == nil
 				exp := i < expFail
 				if exp && !got {
@@ -118,5 +123,18 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 			}
 		}
 	}
+
+	// temporarily remove peer to test odr fails
+	peers.Unregister(lpeer.id)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
+	// expect retrievals to fail (except genesis block) without a les peer
+	test(0)
+
+	peers.Register(lpeer)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
+	lpeer.lock.Lock()
+	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
+	lpeer.lock.Unlock()
+	// expect all retrievals to pass
 	test(5)
 }

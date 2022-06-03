@@ -28,7 +28,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
 	"github.com/xpaymentsorg/go-xpayments/signer/core"
-	"github.com/xpaymentsorg/go-xpayments/signer/core/apitypes"
 	"github.com/xpaymentsorg/go-xpayments/signer/storage"
 )
 
@@ -181,7 +180,7 @@ func TestSignTxRequest(t *testing.T) {
 	}
 	t.Logf("to %v", to.Address().String())
 	resp, err := r.ApproveTx(&core.SignTxRequest{
-		Transaction: apitypes.SendTxArgs{
+		Transaction: core.SendTxArgs{
 			From: *from,
 			To:   to},
 		Callinfo: nil,
@@ -433,15 +432,15 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 	gasPrice := hexutil.Big(*big.NewInt(2000000))
 
 	return &core.SignTxRequest{
-		Transaction: apitypes.SendTxArgs{
+		Transaction: core.SendTxArgs{
 			From:     *from,
 			To:       to,
 			Value:    value,
 			Nonce:    n,
-			GasPrice: &gasPrice,
+			GasPrice: gasPrice,
 			Gas:      gas,
 		},
-		Callinfo: []apitypes.ValidationInfo{
+		Callinfo: []core.ValidationInfo{
 			{Typ: "Warning", Message: "All your base are bellong to us"},
 		},
 		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
@@ -605,7 +604,7 @@ function ApproveSignData(r){
 
 	t.Logf("address %v %v\n", addr.String(), addr.Original())
 
-	nvt := []*apitypes.NameValueType{
+	nvt := []*core.NameValueType{
 		{
 			Name:  "message",
 			Typ:   "text/plain",

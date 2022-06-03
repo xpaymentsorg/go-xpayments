@@ -1,4 +1,3 @@
-//go:build !go1.4
 // +build !go1.4
 
 package log
@@ -16,6 +15,10 @@ type swapHandler struct {
 
 func (h *swapHandler) Log(r *Record) error {
 	return h.Get().Log(r)
+}
+
+func (h *swapHandler) IsLogging(level Lvl) bool {
+	return h.Get().IsLogging(level)
 }
 
 func (h *swapHandler) Get() Handler {
