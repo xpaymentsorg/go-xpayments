@@ -1,9 +1,9 @@
 make.exe --dry-run --always-make --keep-going --print-directory
-make: Entering directory 'c:/Users/genisyskernel/Desktop/xpaymentsorg/go-xpayments'
+make: Entering directory 'h:/GITHUB/xpaymentsorg/go-xpayments'
  
-cd cmd/gochain; go build -o ../../bin/gochain
+cd cmd/gpay; go build -o ../../bin/gpay
 echo "Done building."
  
-echo "Run \"bin/gochain\" to launch gochain."
-make: Leaving directory 'c:/Users/genisyskernel/Desktop/xpaymentsorg/go-xpayments'
+echo "Run \"bin/gpay\" to launch gpay."
+make: Leaving directory 'h:/GITHUB/xpaymentsorg/go-xpayments'
  

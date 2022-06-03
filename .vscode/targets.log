@@ -7,7 +7,7 @@ make.exe all --print-data-base --no-builtin-variables --no-builtin-rules --quest
 # There is NO WARRANTY, to the extent permitted by law.
  
 
-# Make data base, printed on Thu Jun 02 16:50:50 2022
+# Make data base, printed on Fri Jun 03 15:09:00 2022
 
 # Variables
 
@@ -22,9 +22,9 @@ VBOX_MSI_INSTALL_PATH = C:\Program Files\Oracle\VirtualBox\
 # environment
 LOCALAPPDATA = C:\Users\genisyskernel\AppData\Local
 # environment
-VSCODE_IPC_HOOK_EXTHOST = \\.\pipe\vscode-ipc-02641f39-2078-41a1-99cd-782c79fcf4ae-sock
+VSCODE_IPC_HOOK_EXTHOST = \\.\pipe\vscode-ipc-76522dbc-2238-4782-8eb6-b737323e0027-sock
 # environment
-VSCODE_CWD = C:\Program Files\Microsoft VS Code
+VSCODE_CWD = C:\Users\genisyskernel\AppData\Local\GitHubDesktop\app-3.0.1
 # environment
 CHOCOLATEYINSTALL = C:\ProgramData\chocolatey
 # environment
@@ -40,7 +40,7 @@ GOPATH = C:\Users\genisyskernel\go
 # automatic
 @D = $(patsubst %/,%,$(patsubst %\,%,$(dir $@)))
 # environment
-CHROME_CRASHPAD_PIPE_NAME = \\.\pipe\crashpad_13660_NZDRDNRNHDAYUZCP
+CHROME_CRASHPAD_PIPE_NAME = \\.\pipe\crashpad_8948_PEADRZHKTJJIISEV
 # environment
 VSCODE_HANDLES_UNCAUGHT_ERRORS = true
 # default
@@ -72,7 +72,7 @@ ver_check := 1.12
 # environment
 ONEDRIVE = C:\Users\genisyskernel\OneDrive
 # makefile
-CURDIR := c:/Users/genisyskernel/Desktop/xpaymentsorg/go-xpayments
+CURDIR := h:/GITHUB/xpaymentsorg/go-xpayments
 # environment
 VSCODE_PIPE_LOGGING = true
 # environment
@@ -98,7 +98,7 @@ MAKEFILE_LIST := Makefile
 # environment
 VSCODE_VERBOSE_LOGGING = true
 # environment
-VSCODE_PID = 13660
+VSCODE_PID = 8948
 # automatic
 ?D = $(patsubst %/,%,$(patsubst %\,%,$(dir $?)))
 # automatic
@@ -132,6 +132,7 @@ MAKE = $(MAKE_COMMAND)
 # environment
 PATH = C:\Program Files\Eclipse Foundation\jdk-8.0.302.8-hotspot\bin;C:\Program Files (x86)\Intel\Intel(R) Management Engine Components\iCLS\;C:\Program Files\Intel\Intel(R) Management Engine Components\iCLS\;C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Python\Python310\Scripts\;C:\Program Files\Python\Python310\;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\GitHub CLI\;C:\TDM-GCC-64\bin;C:\Program Files\PuTTY\;C:\Program Files\Oracle\VirtualBox;C:\Program Files (x86)\Intel\Intel(R) Management Engine Components\DAL;C:\Program Files\Intel\Intel(R) Management Engine Components\DAL;C:\Program Files (x86)\Intel\Intel(R) Management Engine Components\IPT;C:\Program Files\Intel\Intel(R) Management Engine Components\IPT;C:\Program Files\chromedriver_win32\chromedriver.exe;C:\Program Files\Python\Python271\Tools\Scripts;C:\Program Files\Python\Python271\;C:\Program Files\BraveSoftware\Brave-Browser\Application;C:\Program Files\dotnet\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\ProgramData\chocolatey\bin;C:\HashiCorp\Vagrant\bin;C:\Program Files\Docker\Docker\resources\bin;C:\ProgramData\DockerDesktop\version-bin;C:\xampp\php;C:\ProgramData\ComposerSetup\bin;C:\Users\genisyskernel\AppData\Roaming\nvm;C:\Program Files\nodejs;C:\Program Files\Go\bin;C:\Program Files\solidity-windows;C:\Program Files\Git\cmd;C:\Ruby30-x64\bin;C:\Users\genisyskernel\AppData\Local\Microsoft\WindowsApps;C:\Program Files\Microsoft VS Code\bin;C:\Users\genisyskernel\AppData\Roaming\npm;C:\Users\genisyskernel\AppData\Local\GitHubDesktop\bin;C:\Users\genisyskernel\.dotnet\tools;C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;C:\Users\genisyskernel\AppData\Roaming\Composer\vendor\bin;C:\Users\genisyskernel\go\bin
 # environment
+ 
 COMPUTERNAME = DESKTOP-GENISYS
 # default
 MAKEFILES := 
@@ -152,8 +153,7 @@ LOGONSERVER = \\DESKTOP-GENISYS
 # environment
 VSCODE_LOG_NATIVE = false
 # makefile (from 'Makefile', line 17)
-cur_ver = $(subst go,, 
-$(ver2))
+cur_ver = $(subst go,,$(ver2))
 # environment
 USERNAME = genisyskernel
 # environment
@@ -181,7 +181,7 @@ OS = Windows_NT
 # environment
 __COMPAT_LAYER = RunAsAdmin
 # makefile
-.DEFAULT_GOAL := gochain
+.DEFAULT_GOAL := gpay
 # environment
 NVM_HOME = C:\Users\genisyskernel\AppData\Roaming\nvm
 # default
@@ -243,9 +243,10 @@ PROCESSOR_IDENTIFIER = Intel64 Family 6 Model 158 Stepping 9, GenuineIntel
 
 # Directories
 
-# . (key c:/Users/genisyskernel/Desktop/xpaymentsorg/go-xpayments, mtime 1654199449): 50 files, no impossibilities.
+# . (key h:/GITHUB/xpaymentsorg/go-xpayments, mtime 1654279637): 51 files, no impossibilities.
 
-# 50 files, no impossibilities in 1 directories.
+# 51 files, no im 
+possibilities in 1 directories.
 
 # Implicit Rules
 
@@ -253,46 +254,40 @@ PROCESSOR_IDENTIFIER = Intel64 Family 6 Model 158 Stepping 9, GenuineIntel
 
 # Files
 
+gpay-linux-mips64:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 130):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/gpay
+	@echo "Linux MIPS64 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mips64
+
 swarm:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
 
-gochain-linux-mipsle:
-#  Implicit rule search has not been done.
-#  Modification time never checked.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 125):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/gochain
-	@echo "Linux MIPSle cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep mipsle
-
-gochain-linux-arm-7:
+gpay-linux-arm64:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 110):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm-7 -v ./cmd/gochain
-	@echo "Linux ARMv7 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep arm-7
+#  recipe to execute (from 'Makefile', line 115):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm64 -v ./cmd/gpay
+	@echo "Linux ARM64 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep arm64
 
-# Not a target:
-gochain-ios:
-#  Implicit rule search has not been done.
-#  Modification time never checked.
-#  File has not been updated.
-
-gochain-linux-mips64:
+gpay-linux: gpay-linux-386 gpay-linux-amd64 gpay-linux-arm gpay-linux-mips64 gpay-linux-mips64le
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 130):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/gochain
-	@echo "Linux MIPS64 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep mips64
+#  recipe to execute (from 'Makefile', line 82):
+	@echo "Linux cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-*
 
 docker:
 #  Phony target (prerequisite of .PHONY).
@@ -300,160 +295,119 @@ docker:
 #  File does not exist.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 35):
-	docker build -t gochain/gochain .
+	docker build -t gpay/gpay .
 
-# Not a target:
-gochain-android:
-#  Implicit rule search has not been done.
-#  Modification time never checked.
-#  File has not been updated.
-
-gochain-linux-arm: gochain-linux-arm-5 gochain-linux-arm-6 gochain-linux-arm-7 gochain-linux-arm64
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 96):
-	@echo "Linux ARM cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep arm
-
-# Not a target:
-Makefile:
-#  Implicit rule search has been done.
-#  Last modified 2022-02-23 18:24:32
-#  File has been updated.
-#  Successfully updated.
-
-gochain-linux: gochain-linux-386 gochain-linux-amd64 gochain-linux-arm gochain-linux-mips64 gochain-linux-mips64le
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 82):
-	@echo "Linux cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-*
-
-gochain-windows-386:
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 158):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/386 -v ./cmd/gochain
-	@echo "Windows 386 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-windows-* | grep 386
-
-gochain-cross: gochain-linux gochain-darwin gochain-windows gochain-android gochain-ios
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 78):
-	@echo "Full cross  
-compilation done:"
-	@ls -ld $(GOBIN)/gochain-*
-
-gochain-windows-amd64:
+gpay-windows-amd64:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 163):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/gochain
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/gpay
 	@echo "Windows amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-windows-* | grep amd64
+	@ls -ld $(GOBIN)/gpay-windows-* | grep amd64
 
-gochain-linux-arm-5:
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 100):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm-5 -v ./cmd/gochain
-	@echo "Linux ARMv5 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep arm-5
-
-gochain-windows: gochain-windows-386 gochain-windows-amd64
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 154):
-	@echo "Windows cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-windows-*
-
-gochain-darwin-386:
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 144):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/gochain
-	@echo "Darwin 386 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-darwin-* | grep 386
-
-gochain-linux-386:
+gpay-linux-386:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 86):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/gochain
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/gpay
 	@echo "Linux 386 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep 386
+	@ls -ld $(GOBIN)/gpay-linux-* | grep 386
 
-gochain-darwin-amd64:
+# Not a target:
+Makefile:
+#  Implicit rule search has been done.
+#  Last modified 2022-06-02 23:28:07
+#  File has been updated.
+#  Successfully updated.
+
+# Not a target:
+gpay-android:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+gpay-linux-arm-5:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 149):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/gochain
-	@echo "Darwin amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-darwin-* | grep amd64
+#  recipe to execute (from 'Makefile', line 100):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm-5 -v ./cmd/gpay
+	@echo "Linux ARMv5 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep arm-5
 
-gochain-linux-amd64:
+gpay-darwin-386:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 91):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/gochain
-	@echo "Linux amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep amd64
+#  recipe to execute (from 'Makefile', line 144):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/gpay
+	@echo "Darwin 386 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-darwin-* | grep 386
 
 clean:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
-#  File has not been updated.
+#  File has not been updat 
+ed.
 #  recipe to execute (from 'Makefile', line 60):
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
-gochain-linux-arm64:
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 115):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm64 -v ./cmd/gochain
-	@echo "Linux ARM64 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep arm64
-
-gochain-darwin: gochain-darwin-386 gochain-darwin-amd64
+gpay-darwin: gpay-darwin-386 gpay-darwin-amd64
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 140):
 	@echo "Darwin cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-darwin-*
+	@ls -ld $(GOBIN)/gpay-darwin-*
+
+gpay-cross: gpay-linux gpay-darwin gpay-windows gpay-android gpay-ios
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 78):
+	@echo "Full cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-*
+
+# Not a target:
+gpay-ios:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+gpay-linux-arm-6:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 105):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm-6 -v ./cmd/gpay
+	@echo "Linux ARMv6 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep arm-6
 
 evm:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
+
+gpay-linux-arm-7:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 110):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm-7 -v ./cmd/gpay
+	@echo "Linux ARMv7 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep arm-7
 
 ios:
 #  Phony target (prerequisite of .PHONY).
@@ -463,14 +417,25 @@ ios:
 #  recipe to execute (from 'Makefile', line 52):
 	build/env.sh go run build/ci.go xcode --local
 	@echo "Done building."
-	@echo "Import \"$(GOBIN)/gochain.framework\" to use the library."
+	@echo "Import \"$(GOBIN)/gpay.framework\" to use the library."
+
+gpay:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 25):
+	cd cmd/gpay; go build -o ../../bin/gpay
+	@echo "Done building."
+	@echo "Run \"bin/gpay\" to launch gpay."
 
 bootnode:
 #  Implicit rule search has not been done.
 #  Implicit/static pattern stem: ''
 #  File does not exist.
 #  File has been updated.
-#  Needs to be updated (-q is set).
+#  Needs to be  
+updated (-q is set).
 # automatic
 # @ := bootnode
 # automatic
@@ -489,31 +454,20 @@ bootnode:
 # | := 
 # variable set hash-table stats:
 # Load=8/32=25%, Rehash=0, Collisions=1/11=9%
-#  recipe to execute (from ' 
-Makefile', line 30):
-	cd cmd/bootnode; go build -o ../../bin/gochain-bootnode
+#  recipe to execute (from 'Makefile', line 30):
+	cd cmd/bootnode; go build -o ../../bin/gpay-bootnode
 	@echo "Done building."
-	@echo "Run \"bin/gochain-bootnode\" to launch gochain."
+	@echo "Run \"bin/gpay-bootnode\" to launch gpay."
 
-gochain:
+gpay-linux-mips64le:
 #  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 25):
-	cd cmd/gochain; go build -o ../../bin/gochain
-	@echo "Done building."
-	@echo "Run \"bin/gochain\" to launch gochain."
-
-gochain-linux-arm-6:
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 105):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/arm-6 -v ./cmd/gochain
-	@echo "Linux ARMv6 cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep arm-6
+#  recipe to execute (from 'Makefile', line 135):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/gpay
+	@echo "Linux MIPS64le cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mips64le
 
 # Not a target:
 .DEFAULT:
@@ -529,9 +483,9 @@ android:
 #  recipe to execute (from 'Makefile', line 47):
 	build/env.sh go run build/ci.go aar --local
 	@echo "Done building."
-	@echo "Import \"$(GOBIN)/gochain.aar\" to use the library."
+	@echo "Import \"$(GOBIN)/gpay.aar\" to use the library."
 
-all: bootnode gochain
+all: bootnode gpay
 #  Phony target (prerequisite of .PHONY).
 #  Command line target.
 #  Implicit rule search has not been done.
@@ -540,6 +494,15 @@ all: bootnode gochain
 #  Needs to be updated (-q is set).
 # variable set hash-table stats:
 # Load=0/32=0%, Rehash=0, Collisions=0/3=0%
+
+gpay-linux-mips:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 120):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/gpay
+	@echo "Linux MIPS cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mips
 
 devtools:
 #  Implicit rule search has not been done.
@@ -552,8 +515,18 @@ devtools:
 	env GOBIN= go get -u github.com/golang/protobuf/protoc-gen-go
 	env GOBIN= go install ./cmd/abigen
 	@type "npm" 2> /dev/null || echo 'Please install node.js and npm'
-	@type "solc" 2> /dev/null || echo 'Please install solc'
+	@type "solc" 2> /dev/null || echo 'Please ins 
+tall solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+gpay-linux-mipsle:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 125):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/gpay
+	@echo "Linux MIPSle cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep mipsle
 
 test:
 #  Phony target (prerequisite of .PHONY).
@@ -563,22 +536,62 @@ test:
 #  recipe to execute (from 'Makefile', line 57):
 	go test ./...
 
+gpay-windows-386:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 158):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/386 -v ./cmd/gpay
+	@echo "Windows 386 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-windows-* | grep 386
+
+gpay-darwin-amd64:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 149):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/gpay
+	@echo "Darwin amd64 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-darwin-* | grep amd64
+
 install: all
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 43):
-	cp bin/gochain-bootnode $(GOPATH)/bin/gochain-bootnode
-	cp bin/gochain $(GOPATH)/bin/gochain
+	cp bin/gpay-bootnode $(GOPATH)/bin/gpay-bootnode
+	cp bin/gpay $(GOPATH)/bin/gpay
 
-gochain-linux-mips:
+gpay-linux-amd64:
+#  Phony target (prerequisite of .PHONY).
 #  Implicit rule search has not been done.
-#  Modification time never checked.
+#  File does not exist.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 120):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/gochain
-	@echo "Linux MIPS cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep mips
+#  recipe to execute (from 'Makefile', line 91):
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/gpay
+	@echo "Linux amd64 cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep amd64
+
+gpay-linux-arm: gpay-linux-arm-5 gpay-linux-arm-6 gpay-linux-arm-7 gpay-linux-arm64
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 96):
+	@echo "Linux ARM cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-linux-* | grep arm
+
+gpay-windows: gpay-windows-386 gpay-windows-amd64
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search ha 
+s not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 154):
+	@echo "Windows cross compilation done:"
+	@ls -ld $(GOBIN)/gpay-windows-*
 
 release:
 #  Phony target (prerequisite of .PHONY).
@@ -588,42 +601,32 @@ release:
 #  recipe to execute (from 'Makefile', line 40):
 	./release.sh
 
-gochain-linux-mips64le:
-#  Phony target (prerequisite of .PHONY).
-#  Implicit rule search has not been done.
-#  File does not exist.
-#  File has not been updated.
-#  recipe to execute (from 'Makefile', line 135):
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/gochain
-	@echo "Linux MIPS64le cross compilation done:"
-	@ls -ld $(GOBIN)/gochain-linux-* | grep mips64le
-
 # Not a target:
 .SUFFIXES:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
 
-.PHONY: gochain android ios gochain-cross swarm evm all test clean gochain-linux gochain-linux-386 gochain-linux-amd64 gochain-linux-mips64 gochain-linux-mips64le gochain-linux-arm gochain-li 
-nux-arm-5 gochain-linux-arm-6 gochain-linux-arm-7 gochain-linux-arm64 gochain-darwin gochain-darwin-386 gochain-darwin-amd64 gochain-windows gochain-windows-386 gochain-windows-amd64 docker release
+.PHONY: gpay android ios gpay-cross swarm evm all test clean gpay-linux gpay-linux-386 gpay-linux-amd64 gpay-linux-mips64 gpay-linux-mips64le gpay-linux-arm gpay-linux-arm-5 gpay-linux-arm-6 gpay-linux-arm-7 gpay-linux-arm64 gpay-darwin gpay-darwin-386 gpay-darwin-amd64 gpay-windows gpay-windows-386 gpay-windows-amd64 docker release
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
 
 # files hash-table stats:
-# Load=38/1024=4%, Rehash=0, Collisions=10/127=8%
+# Load=3 
+8/1024=4%, Rehash=0, Collisions=8/127=6%
 # VPATH Search Paths
 
 # No 'vpath' search paths.
 
 # No general ('VPATH' variable) search path.
 
-# strcache buffers: 1 (0) / strings = 87 / storage = 894 B / avg = 10 B
-# current buf: size = 8174 B / used = 894 B / count = 87 / avg = 10 B
+# strcache buffers: 1 (0) / strings = 88 / storage = 821 B / avg = 9 B
+# current buf: size = 8174 B / used = 821 B / count = 88 / avg = 9 B
 
-# strcache performance: lookups = 178 / hit rate = 51%
+# strcache performance: lookups = 179 / hit rate = 50%
 # hash-table stats:
-# Load=87/8192=1%, Rehash=0, Collisions=0/178=0%
-# Finished Make data base on Thu Jun 02 16:50:50 2022
+# Load=88/8192=1%, Rehash=0, Collisions=0/179=0%
+# Finished Make data base on Fri Jun 03 15:09:00 2022
 
  

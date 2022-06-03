@@ -34,5 +34,8 @@ profile.cov
 # IdeaIDE
 .idea
 
+# VSCode
+.vscode
+
 vendor/
 bin/

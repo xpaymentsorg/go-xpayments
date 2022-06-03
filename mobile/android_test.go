@@ -106,7 +106,7 @@ public class AndroidTest extends InstrumentationTestCase {
 			info.getProtocols();
 
 			// Retrieve some data via the APIs (we don't really care about the results)
-			GoClient ec = node.getGoClient();
+			XPSClient ec = node.getXPSClient();
 			ec.getBlockByNumber(ctx, -1).getNumber();
 
 			NewHeadHandler handler = new NewHeadHandler() {

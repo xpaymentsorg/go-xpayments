@@ -28,7 +28,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/goclient"
 	"github.com/xpaymentsorg/go-xpayments/les"
 	"github.com/xpaymentsorg/go-xpayments/netstats"
 	"github.com/xpaymentsorg/go-xpayments/node"
@@ -36,6 +35,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/p2p/nat"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
+	"github.com/xpaymentsorg/go-xpayments/xpaymentsclient"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the xPayments
@@ -193,13 +193,13 @@ func (n *Node) Stop() error {
 	return n.node.Stop()
 }
 
-// GetGoClient retrieves a client to access the xPayments subsystem.
-func (n *Node) GetGoClient() (client *GoClient, _ error) {
+// GetXPSClient retrieves a client to access the xPayments subsystem.
+func (n *Node) GetXPSClient() (client *XPSClient, _ error) {
 	rpc, err := n.node.Attach()
 	if err != nil {
 		return nil, err
 	}
-	return &GoClient{goclient.NewClient(rpc)}, nil
+	return &XPSClient{xpaymentsclient.NewClient(rpc)}, nil
 }
 
 // GetNodeInfo gathers and returns a collection of metadata known about the host.
