@@ -31,8 +31,8 @@ import (
 
 var (
 	// Deprecated: use DefaultFn
-	Default         = new(big.Int).SetUint64(1 * params.Shannon)
-	DefaultMaxPrice = big.NewInt(100000 * params.Shannon)
+	Default         = new(big.Int).SetUint64(2 * params.Shannon)
+	DefaultMaxPrice = big.NewInt(500000 * params.Shannon)
 )
 
 // DefaultFn returns a function to return the default gas price at a given block.
