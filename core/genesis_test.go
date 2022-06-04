@@ -210,12 +210,12 @@ func TestGenesisAlloc_Total(t *testing.T) {
 	}{
 		{
 			name:  "mainnet",
-			exp:   new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(1000000000)),
+			exp:   new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(500000000)),
 			alloc: DefaultGenesisBlock().Alloc,
 		},
 		{
 			name:  "testnet",
-			exp:   new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(1000000000)),
+			exp:   new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(500000000)),
 			alloc: DefaultTestnetGenesisBlock().Alloc,
 		},
 		{

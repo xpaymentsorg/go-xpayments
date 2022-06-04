@@ -30,12 +30,20 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieCache               int
 		TrieTimeout             time.Duration
 		Etherbase               common.Address `toml:",omitempty"`
+		MinerNotify             []string       `toml:",omitempty"`
 		MinerExtraData          hexutil.Bytes  `toml:",omitempty"`
+		MinerGasFloor           uint64
+		MinerGasCeil            uint64
 		MinerGasPrice           *big.Int
+		MinerRecommit           time.Duration
+		MinerNoverify           bool
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
+		EWASMInterpreter        string
+		EVMInterpreter          string
+		ConstantinopleOverride  *big.Int
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -50,13 +58,20 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrieCache = c.TrieCache
 	enc.TrieTimeout = c.TrieTimeout
 	enc.Etherbase = c.Etherbase
+	enc.MinerNotify = c.MinerNotify
 	enc.MinerExtraData = c.MinerExtraData
+	enc.MinerGasFloor = c.MinerGasFloor
+	enc.MinerGasCeil = c.MinerGasCeil
 	enc.MinerGasPrice = c.MinerGasPrice
+	enc.MinerRecommit = c.MinerRecommit
+	enc.MinerNoverify = c.MinerNoverify
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	// enc.Archive = c.Archive
+	enc.EWASMInterpreter = c.EWASMInterpreter
+	enc.EVMInterpreter = c.EVMInterpreter
+	enc.ConstantinopleOverride = c.ConstantinopleOverride
 	return &enc, nil
 }
 
@@ -75,13 +90,20 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieCache               *int
 		TrieTimeout             *time.Duration
 		Etherbase               *common.Address `toml:",omitempty"`
+		MinerNotify             []string        `toml:",omitempty"`
 		MinerExtraData          *hexutil.Bytes  `toml:",omitempty"`
+		MinerGasFloor           *uint64
+		MinerGasCeil            *uint64
 		MinerGasPrice           *big.Int
+		MinerRecommit           *time.Duration
+		MinerNoverify           *bool
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
-		// Archive                 *archive.Config `toml:",omitempty"`
+		EWASMInterpreter        *string
+		EVMInterpreter          *string
+		ConstantinopleOverride  *big.Int
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -123,11 +145,26 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.Etherbase != nil {
 		c.Etherbase = *dec.Etherbase
 	}
+	if dec.MinerNotify != nil {
+		c.MinerNotify = dec.MinerNotify
+	}
 	if dec.MinerExtraData != nil {
 		c.MinerExtraData = *dec.MinerExtraData
 	}
+	if dec.MinerGasFloor != nil {
+		c.MinerGasFloor = *dec.MinerGasFloor
+	}
+	if dec.MinerGasCeil != nil {
+		c.MinerGasCeil = *dec.MinerGasCeil
+	}
 	if dec.MinerGasPrice != nil {
 		c.MinerGasPrice = dec.MinerGasPrice
+	}
+	if dec.MinerRecommit != nil {
+		c.MinerRecommit = *dec.MinerRecommit
+	}
+	if dec.MinerNoverify != nil {
+		c.MinerNoverify = *dec.MinerNoverify
 	}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
@@ -141,8 +178,14 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
 	}
-	// if dec.Archive != nil {
-	// 	c.Archive = *dec.Archive
-	// }
+	if dec.EWASMInterpreter != nil {
+		c.EWASMInterpreter = *dec.EWASMInterpreter
+	}
+	if dec.EVMInterpreter != nil {
+		c.EVMInterpreter = *dec.EVMInterpreter
+	}
+	if dec.ConstantinopleOverride != nil {
+		c.ConstantinopleOverride = dec.ConstantinopleOverride
+	}
 	return nil
 }

@@ -361,7 +361,7 @@ func DefaultGenesisBlock() *Genesis {
 
 // DefaultTestnetGenesisBlock returns the xPayments testnet genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
-	alloc, ok := new(big.Int).SetString("1000000000000000000000000000", 10)
+	alloc, ok := new(big.Int).SetString("500000000000000000000000000", 10)
 	if !ok {
 		panic("failed to parse big.Int string")
 	}
