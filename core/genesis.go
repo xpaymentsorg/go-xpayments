@@ -333,7 +333,7 @@ func GenesisBlockForTesting(db common.Database, addr common.Address, balance *bi
 // DefaultGenesisBlock returns the xPayments mainnet genesis block.
 func DefaultGenesisBlock() *Genesis {
 	allocAddr := common.HexToAddress("0xB161A5d4b896C4d781A5de9518Ce1F9085138574")
-	alloc, ok := new(big.Int).SetString("500000000", 10)
+	alloc, ok := new(big.Int).SetString("500000000000000000000000000", 10)
 	if !ok {
 		panic("failed to parse big.Int string")
 	}
