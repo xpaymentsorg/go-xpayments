@@ -184,8 +184,8 @@ func TestDefaultGenesisBlock(t *testing.T) {
 		file    string
 		genesis *Genesis
 	}{
-		{"mainnet", "genesis-main.json", DefaultGenesisBlock()},
-		{"testnet", "genesis-test.json", DefaultTestnetGenesisBlock()},
+		{"mainnet", "../genesis/genesis_mainnet.json", DefaultGenesisBlock()},
+		{"testnet", "../genesis/genesis-testnet.json", DefaultTestnetGenesisBlock()},
 	} {
 		exp, err := ioutil.ReadFile(test.file)
 		if err != nil {

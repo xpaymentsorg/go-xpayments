@@ -48,7 +48,7 @@ var (
 		DarvazaBlock:        big.NewInt(17_900_000),
 		DarvazaDefaultGas:   new(big.Int).SetUint64(2_000 * Shannon),
 		HafthorBlock:        big.NewInt(23_817_200), // 2022-02-23
-		HafthorStakeAddress: common.HexToAddress("0x4281Cabd60bB91A6A8B0C60842440669DEA3F541"),
+		HafthorStakeAddress: common.HexToAddress("0xa779572d436fe32bbfda9e057806a3f4ae2d9f58"),
 
 		Clique: DefaultCliqueConfig(),
 	}
