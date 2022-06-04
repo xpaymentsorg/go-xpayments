@@ -38,7 +38,7 @@ var DefaultConfig = Config{
 	TrieTimeout:   60 * time.Minute,
 	MinerGasFloor: params.TargetGasLimit,
 	MinerGasCeil:  params.TargetGasLimit,
-	MinerGasPrice: big.NewInt(10000),
+	MinerGasPrice: big.NewInt(1),
 	MinerRecommit: 1 * time.Second,
 
 	TxPool: core.DefaultTxPoolConfig,
