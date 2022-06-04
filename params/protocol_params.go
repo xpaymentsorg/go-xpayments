@@ -28,7 +28,7 @@ const (
 	TargetTxsPerSec = 1300
 
 	GasLimitBoundDivisor uint64 = 1024      // The bound divisor of the gas limit, used in update calculations.
-	MinGasLimit          uint64 = 5000      // Minimum the gas limit may ever be.
+	MinGasLimit          uint64 = 1         // Minimum the gas limit may ever be.
 	GenesisGasLimit      uint64 = 210284448 // Gas limit of the Genesis block.
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
@@ -36,8 +36,8 @@ const (
 	SloadGas              uint64 = 50    // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
 	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
 	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
-	TxGas                 uint64 = 21000 // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
-	TxGasContractCreation uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
+	TxGas                 uint64 = 1     // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
+	TxGasContractCreation uint64 = 10    // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
 	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
 	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
