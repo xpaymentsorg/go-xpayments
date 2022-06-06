@@ -22,8 +22,8 @@ var (
 )
 
 const (
-	DefaultCliquePeriod = 20
-	DefaultCliqueEpoch  = 2000
+	DefaultCliquePeriod = 3
+	DefaultCliqueEpoch  = 3000
 
 	TargetTxsPerSec = 1300
 
