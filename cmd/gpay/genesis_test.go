@@ -49,7 +49,7 @@ var customGenesisTests = map[string]customGenesisTest{
     			}
 			}
 		}`,
-		query:  "eth.getBlock(0).nonce",
+		query:  "xps.getBlock(0).nonce",
 		result: "0x0125864321546982",
 	},
 	// Genesis file with specific chain configurations
@@ -72,7 +72,7 @@ var customGenesisTests = map[string]customGenesisTest{
     			}
 			}
 		}`,
-		query:  "eth.getBlock(0).nonce",
+		query:  "xps.getBlock(0).nonce",
 		result: "0x0000159876215648",
 	},
 }
@@ -97,10 +97,10 @@ func (test customGenesisTest) run(t *testing.T) {
 	runGpay(t, "--datadir", datadir, "init", json).WaitExit()
 
 	// Query the custom genesis block
-	geth := runGpay(t,
+	gpay := runGpay(t,
 		"--datadir", datadir, "--maxpeers", "0", "--port", "0",
 		"--nodiscover", "--nat", "none", "--ipcdisable",
 		"--exec", test.query, "console")
-	geth.ExpectRegexp(test.result)
-	geth.ExpectExit()
+	gpay.ExpectRegexp(test.result)
+	gpay.ExpectExit()
 }

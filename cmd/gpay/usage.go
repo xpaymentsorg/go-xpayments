@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains the geth command usage template and generator.
+// Contains the gpay command usage template and generator.
 
 package main
 
@@ -93,13 +93,13 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "ETHDB",
+		Name: "XPSDB",
 		Flags: []cli.Flag{
-			utils.EthdbEndpointFlag,
-			utils.EthdbBucketFlag,
-			utils.EthdbAccessKeyIDFlag,
-			utils.EthdbSecretAccessKeyFlag,
-			utils.EthdbMaxOpenSegmentCountFlag,
+			utils.XpsdbEndpointFlag,
+			utils.XpsdbBucketFlag,
+			utils.XpsdbAccessKeyIDFlag,
+			utils.XpsdbSecretAccessKeyFlag,
+			utils.XpsdbMaxOpenSegmentCountFlag,
 		},
 	},
 	{
@@ -181,7 +181,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MinerGasPriceFlag,
 			utils.MinerGasTargetFlag,
 			utils.MinerGasLimitFlag,
-			utils.MinerEtherbaseFlag,
+			utils.MinerXpsbaseFlag,
 			utils.MinerExtraDataFlag,
 			utils.MinerRecommitIntervalFlag,
 			utils.MinerNoVerfiyFlag,
@@ -220,7 +220,7 @@ var AppHelpFlagGroups = []flagGroup{
 	// 		utils.MinerLegacyThreadsFlag,
 	// 		utils.MinerLegacyGasTargetFlag,
 	// 		utils.MinerLegacyGasPriceFlag,
-	// 		utils.MinerLegacyEtherbaseFlag,
+	// 		utils.MinerLegacyXpsbaseFlag,
 	// 		utils.MinerLegacyExtraDataFlag,
 	// 	},
 	// },

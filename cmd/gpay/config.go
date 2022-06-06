@@ -30,11 +30,11 @@ import (
 	"github.com/naoina/toml"
 	cli "github.com/urfave/cli"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
-	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/netstats"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
+	"github.com/xpaymentsorg/go-xpayments/xps"
 )
 
 var (
@@ -72,7 +72,7 @@ var tomlSettings = toml.Config{
 }
 
 type gpayConfig struct {
-	Eth      eth.Config
+	Xps      xps.Config
 	Shh      whisper.Config
 	Node     node.Config
 	Netstats netstats.Config
@@ -97,8 +97,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
-	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
+	cfg.HTTPModules = append(cfg.HTTPModules, "xps", "shh")
+	cfg.WSModules = append(cfg.WSModules, "xps", "shh")
 	cfg.IPCPath = "gpay.ipc"
 	return cfg
 }
@@ -106,7 +106,7 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	// Load defaults.
 	cfg := gpayConfig{
-		Eth:  eth.DefaultConfig,
+		Xps:  xps.DefaultConfig,
 		Shh:  whisper.DefaultConfig,
 		Node: defaultNodeConfig(),
 	}
@@ -124,7 +124,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
-	utils.SetEthConfig(ctx, stack, &cfg.Eth)
+	utils.SetXpsConfig(ctx, stack, &cfg.Xps)
 	if ctx.GlobalIsSet(utils.NetStatsURLFlag.Name) {
 		cfg.Netstats, err = netstats.ParseConfig(ctx.GlobalString(utils.NetStatsURLFlag.Name))
 		if err != nil {
@@ -150,9 +150,9 @@ func enableWhisper(ctx *cli.Context) bool {
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.GlobalIsSet(utils.ConstantinopleOverrideFlag.Name) {
-		cfg.Eth.ConstantinopleOverride = new(big.Int).SetUint64(ctx.GlobalUint64(utils.ConstantinopleOverrideFlag.Name))
+		cfg.Xps.ConstantinopleOverride = new(big.Int).SetUint64(ctx.GlobalUint64(utils.ConstantinopleOverrideFlag.Name))
 	}
-	utils.RegisterEthService(context.TODO(), stack, &cfg.Eth)
+	utils.RegisterXpsService(context.TODO(), stack, &cfg.Xps)
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
@@ -180,8 +180,8 @@ func dumpConfig(ctx *cli.Context) error {
 	_, cfg := makeConfigNode(ctx)
 	comment := ""
 
-	if cfg.Eth.Genesis != nil {
-		cfg.Eth.Genesis = nil
+	if cfg.Xps.Genesis != nil {
+		cfg.Xps.Genesis = nil
 		comment += "# Note: this config doesn't contain the genesis block.\n\n"
 	}
 

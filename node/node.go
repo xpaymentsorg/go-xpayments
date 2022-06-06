@@ -29,13 +29,13 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/s3"
 	"github.com/xpaymentsorg/go-xpayments/flock"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb/s3"
 )
 
 // Node is a container on which services can be registered.
@@ -100,7 +100,7 @@ func New(conf *Config) (*Node, error) {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
 	// Ensure that the AccountManager method works before the node has started.
-	// We rely on this in cmd/geth.
+	// We rely on this in cmd/gpay.
 	am, ephemeralKeystore, err := makeAccountManager(conf)
 	if err != nil {
 		return nil, err
@@ -607,10 +607,10 @@ func (n *Node) EventMux() *core.InterfaceFeed {
 // ephemeral, a memory database is returned.
 func (n *Node) OpenDatabase(name string, cache, handles int) (common.Database, error) {
 	if n.config.DataDir == "" {
-		return ethdb.NewMemDatabase(), nil
+		return xpsdb.NewMemDatabase(), nil
 	}
-	db := ethdb.NewDB(n.config.resolvePath(name))
-	if err := s3.ConfigureDB(db, n.config.Ethdb); err != nil {
+	db := xpsdb.NewDB(n.config.resolvePath(name))
+	if err := s3.ConfigureDB(db, n.config.Xpsdb); err != nil {
 		return nil, err
 	} else if err := db.Open(); err != nil {
 		log.Error("Cannot open database", "err", err)

@@ -32,8 +32,8 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 func init() {
@@ -43,7 +43,7 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	diskdb := ethdb.NewMemDatabase()
+	diskdb := xpsdb.NewMemDatabase()
 	trie, _ := New(common.Hash{}, NewDatabase(diskdb))
 	return trie
 }
@@ -68,7 +68,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	diskdb := ethdb.NewMemDatabase()
+	diskdb := xpsdb.NewMemDatabase()
 	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(diskdb))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
@@ -82,7 +82,7 @@ func TestMissingNodeDisk(t *testing.T)    { testMissingNode(t, false) }
 func TestMissingNodeMemonly(t *testing.T) { testMissingNode(t, true) }
 
 func testMissingNode(t *testing.T, memonly bool) {
-	diskdb := ethdb.NewMemDatabase()
+	diskdb := xpsdb.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
 	trie, _ := New(common.Hash{}, triedb)
@@ -207,11 +207,11 @@ func TestDelete(t *testing.T) {
 	trie := newEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"xps", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"xps", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 	}
@@ -235,11 +235,11 @@ func TestEmptyValues(t *testing.T) {
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"xps", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
-		{"ether", ""},
+		{"xps", ""},
 		{"dog", "puppy"},
 		{"shaman", ""},
 	}
@@ -258,7 +258,7 @@ func TestReplication(t *testing.T) {
 	trie := newEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"xps", "wookiedoo"},
 		{"horse", "stallion"},
 		{"shaman", "horse"},
 		{"doge", "coin"},
@@ -294,11 +294,11 @@ func TestReplication(t *testing.T) {
 	// perform some insertions on the new trie.
 	vals2 := []struct{ k, v string }{
 		{"do", "verb"},
-		{"ether", "wookiedoo"},
+		{"xps", "wookiedoo"},
 		{"horse", "stallion"},
 		// {"shaman", "horse"},
 		// {"doge", "coin"},
-		// {"ether", ""},
+		// {"xps", ""},
 		// {"dog", "puppy"},
 		// {"somethingveryoddindeedthis is", "myothernodedata"},
 		// {"shaman", ""},
@@ -414,7 +414,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func runRandTest(rt randTest) bool {
-	diskdb := ethdb.NewMemDatabase()
+	diskdb := xpsdb.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
 	tr, _ := New(common.Hash{}, triedb)
@@ -543,7 +543,7 @@ func benchGet(b *testing.B, commit bool) {
 	b.StopTimer()
 
 	if commit {
-		ldb := trie.db.diskdb.(*ethdb.Table)
+		ldb := trie.db.diskdb.(*xpsdb.Table)
 		ldb.Close()
 		os.RemoveAll(ldb.Path)
 	}
@@ -599,7 +599,7 @@ func tempDB() (string, *Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	diskDB := ethdb.NewDB(dir)
+	diskDB := xpsdb.NewDB(dir)
 	if err := diskDB.Open(); err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

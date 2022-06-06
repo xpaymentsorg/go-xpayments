@@ -22,11 +22,11 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/s3"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb/s3"
 )
 
 // ServiceContext is a collection of service independent options inherited from
@@ -44,10 +44,10 @@ type ServiceContext struct {
 // node is an ephemeral one, a memory database is returned.
 func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (common.Database, error) {
 	if ctx.config.DataDir == "" {
-		return ethdb.NewMemDatabase(), nil
+		return xpsdb.NewMemDatabase(), nil
 	}
-	db := ethdb.NewDB(ctx.config.resolvePath(name))
-	if err := s3.ConfigureDB(db, ctx.config.Ethdb); err != nil {
+	db := xpsdb.NewDB(ctx.config.resolvePath(name))
+	if err := s3.ConfigureDB(db, ctx.config.Xpsdb); err != nil {
 		return nil, err
 	}
 	if err := db.Open(); err != nil {

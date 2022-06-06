@@ -35,14 +35,14 @@ import (
 var bugCommand = cli.Command{
 	Action:    utils.MigrateFlags(reportBug),
 	Name:      "bug",
-	Usage:     "opens a window to report a bug on the geth repo",
+	Usage:     "opens a window to report a bug on the gpay repo",
 	ArgsUsage: " ",
 	Category:  "MISCELLANEOUS COMMANDS",
 }
 
-const issueUrl = "https://github.com/ethereum/go-ethereum/issues/new"
+const issueUrl = "https://github.com/xpaymentsorg/go-xpayments/issues/new"
 
-// reportBug reports a bug by opening a new URL to the go-ethereum GH issue
+// reportBug reports a bug by opening a new URL to the go-xpayments GH issue
 // tracker and setting default values as the issue body.
 func reportBug(ctx *cli.Context) error {
 	// execute template and write contents to buff

@@ -29,8 +29,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 func TestDefaultGenesisBlockHash(t *testing.T) {
@@ -156,7 +156,7 @@ func TestSetupGenesis(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		db := ethdb.NewMemDatabase()
+		db := xpsdb.NewMemDatabase()
 		config, hash, err := test.fn(db)
 		// Check the return values.
 		if !reflect.DeepEqual(err, test.wantErr) {
@@ -210,12 +210,12 @@ func TestGenesisAlloc_Total(t *testing.T) {
 	}{
 		{
 			name:  "mainnet",
-			exp:   new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(500000000)),
+			exp:   new(big.Int).Mul(big.NewInt(params.Xps), big.NewInt(500000000)),
 			alloc: DefaultGenesisBlock().Alloc,
 		},
 		{
 			name:  "testnet",
-			exp:   new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(500000000)),
+			exp:   new(big.Int).Mul(big.NewInt(params.Xps), big.NewInt(500000000)),
 			alloc: DefaultTestnetGenesisBlock().Alloc,
 		},
 		{

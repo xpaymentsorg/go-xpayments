@@ -33,9 +33,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var (
@@ -136,7 +136,7 @@ Remove blockchain and state databases`,
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.`,
+Use "xpayments dump 0" to dump the genesis block.`,
 	}
 )
 
@@ -220,7 +220,7 @@ func importChain(ctx *cli.Context) error {
 
 	/*
 		// Output pre-compaction stats mostly to see the import trashing
-		db := chainDb.(*ethdb.LDBDatabase)
+		db := chainDb.(*xpsdb.LDBDatabase)
 
 		stats, err := db.LDB().GetProperty("leveldb.stats")
 		if err != nil {
@@ -306,7 +306,7 @@ func copyDb(ctx *cli.Context) error {
 	dl := downloader.New(syncmode, chainDb, new(core.InterfaceFeed), chain, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db := ethdb.NewDB(ctx.Args().First())
+	db := xpsdb.NewDB(ctx.Args().First())
 	if err := db.Open(); err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func copyDb(ctx *cli.Context) error {
 	/*
 		start = time.Now()
 		fmt.Println("Compacting entire database...")
-		if err = chainDb.(*ethdb.LDBDatabase).LDB().CompactRange(util.Range{}); err != nil {
+		if err = chainDb.(*xpsdb.LDBDatabase).LDB().CompactRange(util.Range{}); err != nil {
 			utils.Fatalf("Compaction failed: %v", err)
 		}
 		fmt.Printf("Compaction done in %v.\n\n", time.Since(start))

@@ -32,12 +32,12 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"
-	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/xpaymentsclient"
+	"github.com/xpaymentsorg/go-xpayments/xps"
 	"go.opencensus.io/trace"
 )
 
@@ -96,8 +96,8 @@ var (
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
 		utils.MinerLegacyGasPriceFlag,
-		utils.MinerEtherbaseFlag,
-		utils.MinerLegacyEtherbaseFlag,
+		utils.MinerXpsbaseFlag,
+		utils.MinerLegacyXpsbaseFlag,
 		utils.MinerExtraDataFlag,
 		utils.MinerLegacyExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
@@ -126,11 +126,11 @@ var (
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
-		utils.EthdbEndpointFlag,
-		utils.EthdbBucketFlag,
-		utils.EthdbAccessKeyIDFlag,
-		utils.EthdbSecretAccessKeyFlag,
-		utils.EthdbMaxOpenSegmentCountFlag,
+		utils.XpsdbEndpointFlag,
+		utils.XpsdbBucketFlag,
+		utils.XpsdbAccessKeyIDFlag,
+		utils.XpsdbSecretAccessKeyFlag,
+		utils.XpsdbMaxOpenSegmentCountFlag,
 		configFileFlag,
 	}
 
@@ -217,7 +217,7 @@ func main() {
 	}
 }
 
-// geth is the main entry point into the system if no special subcommand is ran.
+// gpay is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func gpay(ctx *cli.Context) error {
@@ -313,7 +313,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
-		var xpayments *eth.XPS
+		var xpayments *xps.XPS
 		if err := stack.Service(&xpayments); err != nil {
 			utils.Fatalf("xPayments service not running: %v", err)
 		}

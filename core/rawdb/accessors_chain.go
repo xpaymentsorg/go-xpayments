@@ -23,10 +23,10 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
@@ -47,7 +47,7 @@ func ReadCanonicalHash(db common.Database, number uint64) common.Hash {
 					log.Warn("Failed to put canonical hash to global table", "number", number, "err", perr)
 				} else {
 					// Can ignore ErrImmutableSegment errors here.
-					if derr := db.HeaderTable().Delete(k); err != nil && err != ethdb.ErrImmutableSegment {
+					if derr := db.HeaderTable().Delete(k); err != nil && err != xpsdb.ErrImmutableSegment {
 						log.Warn("Failed to delete canonical hash from header table", "number", number, "err", derr)
 					}
 				}
@@ -72,10 +72,10 @@ func WriteCanonicalHash(db common.Database, hash common.Hash, number uint64) {
 func DeleteCanonicalHash(db common.Database, number uint64) {
 	k := numKey(number)
 	Must("delete canonical hash", func() error {
-		if err := db.HeaderTable().Delete(k); err != nil && err != ethdb.ErrImmutableSegment {
+		if err := db.HeaderTable().Delete(k); err != nil && err != xpsdb.ErrImmutableSegment {
 			log.Warn("Failed to delete canonical hash from header table", "number", number, "err", err)
 			return err
-		} else if err == ethdb.ErrImmutableSegment {
+		} else if err == xpsdb.ErrImmutableSegment {
 			// Cannot tolerate ErrImmutableSegment errors here, but this shouldn't happen in practice.
 			log.Crit("Unable to delete canonical hash from immutable segment. Database may not be recoverable.", "number", number, "err", err)
 		}

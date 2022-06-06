@@ -116,7 +116,7 @@ type intervalAdjust struct {
 type worker struct {
 	config *params.ChainConfig
 	engine consensus.Engine
-	eth    Backend
+	xps    Backend
 	chain  *core.BlockChain
 
 	gasFloor uint64
@@ -164,17 +164,17 @@ type worker struct {
 	resubmitHook atomic.Value     // func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *core.InterfaceFeed, recommit time.Duration, gasFloor, gasCeil uint64, isLocalBlock func(*types.Block) bool) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, xps Backend, mux *core.InterfaceFeed, recommit time.Duration, gasFloor, gasCeil uint64, isLocalBlock func(*types.Block) bool) *worker {
 	worker := &worker{
 		config:             config,
 		engine:             engine,
-		eth:                eth,
+		xps:                xps,
 		mux:                mux,
-		chain:              eth.BlockChain(),
+		chain:              xps.BlockChain(),
 		gasFloor:           gasFloor,
 		gasCeil:            gasCeil,
 		isLocalBlock:       isLocalBlock,
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		unconfirmed:        newUnconfirmedBlocks(xps.BlockChain(), miningLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -187,9 +187,9 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
 	// Subscribe NewTxsEvent for tx pool
-	eth.TxPool().SubscribeNewTxsEvent(worker.txsCh, "miner.worker")
+	xps.TxPool().SubscribeNewTxsEvent(worker.txsCh, "miner.worker")
 	// Subscribe events for blockchain
-	eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh, "miner.worker")
+	xps.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh, "miner.worker")
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	if recommit < minRecommitInterval {
@@ -228,8 +228,8 @@ func (w *worker) getResubmitHook() func(time.Duration, time.Duration) {
 	return v.(func(time.Duration, time.Duration))
 }
 
-// setEtherbase sets the etherbase used to initialize the block coinbase field.
-func (w *worker) setEtherbase(addr common.Address) {
+// setXpsbase sets the xpsbase used to initialize the block coinbase field.
+func (w *worker) setXpsbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
@@ -405,8 +405,8 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 // mainLoop is a standalone goroutine to regenerate the sealing task based on the received event.
 func (w *worker) mainLoop() {
-	defer w.eth.TxPool().UnsubscribeNewTxsEvent(w.txsCh)
-	defer w.eth.BlockChain().UnsubscribeChainHeadEvent(w.chainHeadCh)
+	defer w.xps.TxPool().UnsubscribeNewTxsEvent(w.txsCh)
+	defer w.xps.BlockChain().UnsubscribeChainHeadEvent(w.chainHeadCh)
 
 	for {
 		select {
@@ -825,7 +825,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
+			log.Error("Refusing to mine without xpsbase")
 			return
 		}
 		header.Coinbase = w.coinbase
@@ -853,7 +853,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending()
+	pending := w.xps.TxPool().Pending()
 	// Short circuit if there is no available pending transactions
 	if len(pending) == 0 {
 		w.updateSnapshot()
@@ -861,7 +861,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
-	for _, account := range w.eth.TxPool().Locals() {
+	for _, account := range w.xps.TxPool().Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
 			delete(remoteTxs, account)
 			localTxs[account] = txs
@@ -905,10 +905,10 @@ func (w *worker) commit(delay bool, update bool, start time.Time) error {
 			for i, tx := range block.Transactions() {
 				feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
 			}
-			feesEth := new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+			feesXps := new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Xps)))
 
 			log.Info("Commit new mining work", "number", block.Number(), "diff", block.Difficulty(), "parent", block.ParentHash(),
-				"txs", w.current.tcount, "gas", block.GasUsed(), "fees", feesEth, "elapsed", common.PrettyDuration(time.Since(start)))
+				"txs", w.current.tcount, "gas", block.GasUsed(), "fees", feesXps, "elapsed", common.PrettyDuration(time.Since(start)))
 
 		case <-w.exitCh:
 			log.Info("Worker has exited")

@@ -57,7 +57,7 @@ func (self Storage) Copy() Storage {
 	return cpy
 }
 
-// stateObject represents an Ethereum account which is being modified.
+// stateObject represents an xPayments account which is being modified.
 //
 // The usage pattern is as follows:
 // First you need to obtain a state object.
@@ -65,7 +65,7 @@ func (self Storage) Copy() Storage {
 // Finally, call CommitTrie to write the modified storage trie into a database.
 type stateObject struct {
 	address  common.Address
-	addrHash common.Hash // hash of ethereum address of the account
+	addrHash common.Hash // hash of xpayments address of the account
 	data     Account
 	db       *StateDB
 
@@ -96,7 +96,7 @@ func (so *stateObject) empty() bool {
 	return so.data.Nonce == 0 && so.data.Balance.Sign() == 0 && so.data.CodeHash == emptyCodeHash
 }
 
-// Account is the Ethereum consensus representation of accounts.
+// Account is the xPayments consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
 	Nonce    uint64

@@ -133,7 +133,7 @@ var (
 	ErrIneligibleSigner = errors.New("signer is not eligible to sign this block")
 )
 
-// ecrecover extracts the Ethereum account address from a signed header.
+// ecrecover extracts the xPayments account address from a signed header.
 func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
 	// If the signature's already cached, return that
 	hash := header.Hash()
@@ -146,7 +146,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	}
 	signature := header.Signer
 
-	// Recover the public key and the Ethereum address
+	// Recover the public key and the xPayments address
 	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
 	if err != nil {
 		return common.Address{}, err
@@ -165,7 +165,7 @@ type propose struct {
 }
 
 // Clique is the proof-of-authority consensus engine proposed to support the
-// Ethereum testnet following the Ropsten attacks.
+// xPayments testnet following the Ropsten attacks.
 type Clique struct {
 	config *params.CliqueConfig // Consensus engine configuration parameters
 	db     common.Database      // Database to store and retrieve snapshot checkpoints

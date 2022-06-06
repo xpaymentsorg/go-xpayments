@@ -20,13 +20,13 @@ import (
 	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var addr = common.BytesToAddress([]byte("test"))
 
 func create(t *testing.T) (*ManagedState, *account) {
-	db := ethdb.NewMemDatabase()
+	db := xpsdb.NewMemDatabase()
 	statedb, _ := New(common.Hash{}, NewDatabase(db))
 	ms := ManageState(statedb)
 	ms.StateDB.SetNonce(addr, 100)
