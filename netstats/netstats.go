@@ -408,7 +408,7 @@ func (s *Service) login(conn *websocket.Conn) error {
 	infos := s.server.NodeInfo()
 
 	var network, protocol string
-	if info := infos.Protocols["xps"]; info != nil {
+	if info := infos.Protocols["eth"]; info != nil {
 		network = fmt.Sprintf("%d", info.(*xps.NodeInfo).Network)
 		protocol = fmt.Sprintf("xps/%d", xps.ProtocolVersions[0])
 	} else {
