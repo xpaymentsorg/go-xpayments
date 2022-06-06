@@ -251,9 +251,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
-	p.Log().Debug("GoChain peer connected", "name", p.Name())
+	p.Log().Debug("xPayments peer connected", "name", p.Name())
 
-	// Execute the GoChain handshake
+	// Execute the xPayments handshake
 	var (
 		genesis = pm.blockchain.Genesis()
 		head    = pm.blockchain.CurrentHeader()
@@ -262,7 +262,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		td      = pm.blockchain.GetTd(hash, number)
 	)
 	if err := p.Handshake(pm.networkId, td, hash, genesis.Hash()); err != nil {
-		p.Log().Debug("GoChain handshake failed", "err", err)
+		p.Log().Debug("xPayments handshake failed", "err", err)
 		return err
 	}
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
@@ -270,7 +270,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 	// Register the peer locally
 	if err := pm.peers.Register(p); err != nil {
-		p.Log().Error("GoChain peer registration failed", "err", err)
+		p.Log().Error("xPayments peer registration failed", "err", err)
 		return err
 	}
 	defer pm.removePeer(p.id)
@@ -286,7 +286,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			p.Log().Error("GoChain message handling failed", "err", err)
+			p.Log().Error("xPayments message handling failed", "err", err)
 			return err
 		}
 	}
@@ -697,10 +697,10 @@ func (pm *ProtocolManager) txBroadcastLoop() {
 	}
 }
 
-// NodeInfo represents a short summary of the GoChain sub-protocol metadata
+// NodeInfo represents a short summary of the xPayments sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // GoChain network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Network    uint64              `json:"network"`    // xPayments network ID (1=Mainnet, Beryllium=2)
 	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
