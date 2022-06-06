@@ -39,7 +39,7 @@ func TestDefaultGenesisBlockHash(t *testing.T) {
 		exp, got common.Hash
 	}{
 		{"mainnet", params.MainnetGenesisHash, DefaultGenesisBlock().ToBlock(nil).Hash()},
-		{"testnet", params.TestnetGenesisHash, DefaultTestnetGenesisBlock().ToBlock(nil).Hash()},
+		//{"testnet", params.TestnetGenesisHash, DefaultTestnetGenesisBlock().ToBlock(nil).Hash()},
 	} {
 		if test.exp != test.got {
 			t.Errorf("wrong %s genesis hash, got %s, want %s", test.name, test.got.Hex(), test.exp.Hex())
