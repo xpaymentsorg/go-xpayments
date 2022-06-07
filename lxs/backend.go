@@ -211,6 +211,21 @@ func (s *LightXPS) APIs() []rpc.API {
 			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
 			Public:    true,
 		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &LightDummyAPI{},
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
+			Public:    true,
+		}, {
 			Namespace: "net",
 			Version:   "1.0",
 			Service:   s.netRPCService,

@@ -411,6 +411,9 @@ func (s *Service) login(conn *websocket.Conn) error {
 	if info := infos.Protocols["xps"]; info != nil {
 		network = fmt.Sprintf("%d", info.(*xps.NodeInfo).Network)
 		protocol = fmt.Sprintf("xps/%d", xps.ProtocolVersions[0])
+	} else if info := infos.Protocols["eth"]; info != nil {
+		network = fmt.Sprintf("%d", info.(*xps.NodeInfo).Network)
+		protocol = fmt.Sprintf("eth/%d", xps.ProtocolVersions[0])
 	} else {
 		network = fmt.Sprintf("%d", infos.Protocols["lxs"].(*lxs.NodeInfo).Network)
 		protocol = fmt.Sprintf("lxs/%d", lxs.ClientProtocolVersions[0])
@@ -426,7 +429,7 @@ func (s *Service) login(conn *websocket.Conn) error {
 			API:      "No",
 			Os:       runtime.GOOS,
 			OsVer:    runtime.GOARCH,
-			Client:   "0.1.1",
+			Client:   "0.0.1",
 			History:  true,
 		},
 		Secret: s.pass,

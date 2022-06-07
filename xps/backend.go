@@ -258,12 +258,32 @@ func (xpayments *XPS) APIs() []rpc.API {
 			Service:   downloader.NewPublicDownloaderAPI(xpayments.protocolManager.downloader, xpayments.eventMux),
 			Public:    true,
 		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicxPaymentsAPI(xpayments),
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicMinerAPI(xpayments),
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   downloader.NewPublicDownloaderAPI(xpayments.protocolManager.downloader, xpayments.eventMux),
+			Public:    true,
+		}, {
 			Namespace: "miner",
 			Version:   "1.0",
 			Service:   NewPrivateMinerAPI(xpayments),
 			Public:    false,
 		}, {
 			Namespace: "xps",
+			Version:   "1.0",
+			Service:   filters.NewPublicFilterAPI(xpayments.ApiBackend, false),
+			Public:    true,
+		}, {
+			Namespace: "eth",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(xpayments.ApiBackend, false),
 			Public:    true,

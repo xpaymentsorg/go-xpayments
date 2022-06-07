@@ -415,9 +415,9 @@ func (c *Client) XpsSubscribe(ctx context.Context, channel interface{}, args ...
 
 // ShhSubscribe registers a subscripion under the "shh" namespace.
 // Deprecated: use Subscribe(ctx, "shh", ...).
-// func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
-// 	return c.Subscribe(ctx, "shh", channel, args...)
-// }
+func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.Subscribe(ctx, "shh", channel, args...)
+}
 
 // Subscribe calls the "<namespace>_subscribe" method with the given arguments,
 // registering a subscription. Server notifications for the subscription are

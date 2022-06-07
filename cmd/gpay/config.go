@@ -97,8 +97,10 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit)
-	cfg.HTTPModules = append(cfg.HTTPModules, "xps", "shh")
-	cfg.WSModules = append(cfg.WSModules, "xps", "shh")
+	// cfg.HTTPModules = append(cfg.HTTPModules, "xps", "shh")
+	// cfg.WSModules = append(cfg.WSModules, "xps", "shh")
+	cfg.HTTPModules = append(cfg.HTTPModules, "xps", "eth")
+	cfg.WSModules = append(cfg.WSModules, "xps", "eth")
 	cfg.IPCPath = "gpay.ipc"
 	return cfg
 }
