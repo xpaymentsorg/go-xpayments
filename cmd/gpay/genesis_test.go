@@ -49,7 +49,7 @@ var customGenesisTests = map[string]customGenesisTest{
     			}
 			}
 		}`,
-		query:  "xps.getBlock(0).nonce",
+		query:  "eth.getBlock(0).nonce",
 		result: "0x0125864321546982",
 	},
 	// Genesis file with specific chain configurations
@@ -72,7 +72,7 @@ var customGenesisTests = map[string]customGenesisTest{
     			}
 			}
 		}`,
-		query:  "xps.getBlock(0).nonce",
+		query:  "eth.getBlock(0).nonce",
 		result: "0x0000159876215648",
 	},
 }

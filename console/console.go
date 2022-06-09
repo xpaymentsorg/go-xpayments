@@ -191,7 +191,7 @@ func (c *Console) initExtensions() error {
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
-	aliases := map[string]struct{}{"xps": {}, "personal": {}}
+	aliases := map[string]struct{}{"eth": {}, "personal": {}}
 	for api := range apis {
 		if api == "web3" {
 			continue
@@ -229,19 +229,19 @@ func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
 //
 // If the console is in interactive mode and the 'personal' API is available, override
 // the openWallet, unlockAccount, newAccount and sign methods since these require user
-// interaction. The original web3 callbacks are stored in 'jxps'. These will be called
+// interaction. The original web3 callbacks are stored in 'jeth'. These will be called
 // by the bridge after the prompt and send the original web3 request to the backend.
 func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 	personal := getObject(vm, "personal")
 	if personal == nil || c.prompter == nil {
 		return
 	}
-	jxps := vm.NewObject()
-	vm.Set("jxps", jxps)
-	jxps.Set("openWallet", personal.Get("openWallet"))
-	jxps.Set("unlockAccount", personal.Get("unlockAccount"))
-	jxps.Set("newAccount", personal.Get("newAccount"))
-	jxps.Set("sign", personal.Get("sign"))
+	jeth := vm.NewObject()
+	vm.Set("jeth", jeth)
+	jeth.Set("openWallet", personal.Get("openWallet"))
+	jeth.Set("unlockAccount", personal.Get("unlockAccount"))
+	jeth.Set("newAccount", personal.Get("newAccount"))
+	jeth.Set("sign", personal.Get("sign"))
 	personal.Set("openWallet", jsre.MakeCallback(vm, bridge.OpenWallet))
 	personal.Set("unlockAccount", jsre.MakeCallback(vm, bridge.UnlockAccount))
 	personal.Set("newAccount", jsre.MakeCallback(vm, bridge.NewAccount))
@@ -277,7 +277,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 		return "", nil, ""
 	}
 	// Chunck data to relevant part for autocompletion
-	// E.g. in case of nested lines xps.getBalance(xps.coinb<tab><tab>
+	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including the dot)
@@ -305,9 +305,9 @@ func (c *Console) Welcome() {
 	if res, err := c.jsre.Run(`
 		var message = "instance: " + web3.version.node + "\n";
 		try {
-			message += "coinbase: " + xps.coinbase + "\n";
+			message += "coinbase: " + eth.coinbase + "\n";
 		} catch (err) {}
-		message += "at block: " + xps.blockNumber + " (" + new Date(1000 * xps.getBlock(xps.blockNumber).timestamp) + ")\n";
+		message += "at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")\n";
 		try {
 			message += " datadir: " + admin.datadir + "\n";
 		} catch (err) {}

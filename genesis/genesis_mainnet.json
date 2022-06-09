@@ -13,8 +13,8 @@
     "hafthorBlock": 23817200,
     "hafthorStakeAddress": "0xa779572d436fe32bbfda9e057806a3f4ae2d9f58",
     "clique": {
-      "period": 3,
-      "epoch": 3000
+      "period": 15,
+      "epoch": 30000
     }
   },
   "nonce": "0x0",
