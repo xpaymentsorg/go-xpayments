@@ -22,7 +22,6 @@ var Modules = map[string]string{
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
 	"debug":      Debug_JS,
-	"xps":        Xps_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
 	"net":        Net_JS,
@@ -402,73 +401,9 @@ web3._extend({
 });
 `
 
-const Xps_JS = `
-web3._extend({
-	property: 'xps',
-	methods: [
-		new web3._extend.Method({
-			name: 'chainId',
-			call: 'xps_chainId',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'sign',
-			call: 'xps_sign',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null]
-		}),
-		new web3._extend.Method({
-			name: 'resend',
-			call: 'xps_resend',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
-			name: 'signTransaction',
-			call: 'xps_signTransaction',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
-		}),
-		new web3._extend.Method({
-			name: 'submitTransaction',
-			call: 'xps_submitTransaction',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
-		}),
-		new web3._extend.Method({
-			name: 'getRawTransaction',
-			call: 'xps_getRawTransactionByHash',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'getRawTransactionFromBlock',
-			call: function(args) {
-				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'xps_getRawTransactionByBlockHashAndIndex' : 'xps_getRawTransactionByBlockNumberAndIndex';
-			},
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
-		}),
-	],
-	properties: [
-		new web3._extend.Property({
-			name: 'pendingTransactions',
-			getter: 'xps_pendingTransactions',
-			outputFormatter: function(txs) {
-				var formatted = [];
-				for (var i = 0; i < txs.length; i++) {
-					formatted.push(web3._extend.formatters.outputTransactionFormatter(txs[i]));
-					formatted[i].blockHash = null;
-				}
-				return formatted;
-			}
-		}),
-	]
-});
-`
-
 const Eth_JS = `
 web3._extend({
-	property: 'eth',
+	property: 'xps',
 	methods: [
 		new web3._extend.Method({
 			name: 'chainId',

@@ -64,6 +64,26 @@ type ChainReader interface {
 	SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (Subscription, error)
 }
 
+// ChainReaderEth provides access to the blockchain. The methods in this interface access raw
+// data from either the canonical chain (when requesting by block number) or any
+// blockchain fork that was previously downloaded and processed by the node. The block
+// number argument can be nil to select the latest canonical block. Reading block headers
+// should be preferred over full blocks whenever possible.
+//
+// The returned error is NotFound if the requested item does not exist.
+type ChainReaderEth interface {
+	BlockByHashEth(ctx context.Context, hash common.Hash) (*types.Block, error)
+	BlockByNumberEth(ctx context.Context, number *big.Int) (*types.Block, error)
+	HeaderByHashEth(ctx context.Context, hash common.Hash) (*types.Header, error)
+	HeaderByNumberEth(ctx context.Context, number *big.Int) (*types.Header, error)
+	TransactionCountEth(ctx context.Context, blockHash common.Hash) (uint, error)
+	TransactionInBlockEth(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error)
+
+	// This method subscribes to notifications about changes of the head block of
+	// the canonical chain.
+	SubscribeNewHeadEth(ctx context.Context, ch chan<- *types.Header) (Subscription, error)
+}
+
 // TransactionReader provides access to past transactions and their receipts.
 // Implementations may impose arbitrary restrictions on the transactions and receipts that
 // can be retrieved. Historic transactions may not be available.
@@ -96,7 +116,7 @@ type ChainStateReader interface {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the Ethereum network.
+// the xPayments network.
 type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at

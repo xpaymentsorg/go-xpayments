@@ -243,21 +243,6 @@ func (xpayments *XPS) APIs() []rpc.API {
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
-			Namespace: "xps",
-			Version:   "1.0",
-			Service:   NewPublicxPaymentsAPI(xpayments),
-			Public:    true,
-		}, {
-			Namespace: "xps",
-			Version:   "1.0",
-			Service:   NewPublicMinerAPI(xpayments),
-			Public:    true,
-		}, {
-			Namespace: "xps",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(xpayments.protocolManager.downloader, xpayments.eventMux),
-			Public:    true,
-		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewPublicxPaymentsAPI(xpayments),
@@ -277,11 +262,6 @@ func (xpayments *XPS) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateMinerAPI(xpayments),
 			Public:    false,
-		}, {
-			Namespace: "xps",
-			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(xpayments.ApiBackend, false),
-			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",

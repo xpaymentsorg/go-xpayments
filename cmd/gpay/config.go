@@ -99,8 +99,8 @@ func defaultNodeConfig() node.Config {
 	cfg.Version = params.VersionWithCommit(gitCommit)
 	// cfg.HTTPModules = append(cfg.HTTPModules, "xps", "shh")
 	// cfg.WSModules = append(cfg.WSModules, "xps", "shh")
-	cfg.HTTPModules = append(cfg.HTTPModules, "xps", "eth")
-	cfg.WSModules = append(cfg.WSModules, "xps", "eth")
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
+	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "gpay.ipc"
 	return cfg
 }
@@ -108,8 +108,8 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gpayConfig) {
 	// Load defaults.
 	cfg := gpayConfig{
-		Xps:  xps.DefaultConfig,
-		Shh:  whisper.DefaultConfig,
+		Xps: xps.DefaultConfig,
+		//Shh:  whisper.DefaultConfig,
 		Node: defaultNodeConfig(),
 	}
 

@@ -272,7 +272,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Failed to attach to self: %v", err)
 		}
 		stateReader := xpaymentsclient.NewClient(rpcClient)
-		stateReaderEth := xpaymentsclient.NewClientEth(rpcClient)
 
 		// Open any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
@@ -298,7 +297,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
 
 				event.Wallet.SelfDerive(derivationPaths, stateReader)
-				event.Wallet.SelfDerive(derivationPaths, stateReaderEth)
 
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
