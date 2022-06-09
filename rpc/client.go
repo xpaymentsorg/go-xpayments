@@ -408,9 +408,9 @@ func (c *Client) Notify(ctx context.Context, method string, args ...interface{})
 	return c.send(ctx, op, msg)
 }
 
-// XpsSubscribe registers a subscripion under the "xps" namespace.
+// XpsSubscribe registers a subscripion under the "eth" namespace.
 func (c *Client) XpsSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
-	return c.Subscribe(ctx, "xps", channel, args...)
+	return c.Subscribe(ctx, "eth", channel, args...)
 }
 
 // ShhSubscribe registers a subscripion under the "shh" namespace.
