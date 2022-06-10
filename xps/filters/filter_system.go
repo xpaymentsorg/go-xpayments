@@ -122,7 +122,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	}
 
 	// Subscribe events
-	const name = "xps/filters.EventSystem"
+	const name = "eth/filters.EventSystem"
 	m.backend.SubscribeNewTxsEvent(m.txsCh, name)
 	m.backend.SubscribeLogsEvent(m.logsCh, name)
 	m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh, name)

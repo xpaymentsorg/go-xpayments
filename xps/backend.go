@@ -143,7 +143,7 @@ func New(sctx *node.ServiceContext, config *Config) (*XPS, error) {
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb.GlobalTable())
-	var dbVer = "<nil>"
+	var dbVer = "7"
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}

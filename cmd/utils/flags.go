@@ -1196,11 +1196,11 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 		}
 		log.Info("Signing with account", "address", signer.Address)
 
-		oneGO, ok := new(big.Int).SetString("1000000000000000000", 10)
+		oneXPS, ok := new(big.Int).SetString("1000000000000000000", 10)
 		if !ok {
 			panic("failed to parse big.Int string")
 		}
-		oneThousandGO := new(big.Int).Mul(big.NewInt(1000), oneGO)
+		oneThousandXPS := new(big.Int).Mul(big.NewInt(1000), oneXPS)
 
 		alloc := make(core.GenesisAlloc)
 		seedStrs := ctx.GlobalStringSlice(LocalFundFlag.Name)
@@ -1222,9 +1222,9 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 					if !ok {
 						Fatalf("failed to parse seed amount: %s", parts[1])
 					}
-					amount = a.Mul(a, oneGO)
+					amount = a.Mul(a, oneXPS)
 				} else {
-					amount = oneThousandGO
+					amount = oneThousandXPS
 				}
 
 				alloc[addr] = core.GenesisAccount{Balance: amount}
@@ -1237,7 +1237,7 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 					Fatalf("Failed to create account: %v", err)
 				}
 				addr := crypto.PubkeyToAddress(acc.PrivateKey().PublicKey)
-				alloc[addr] = core.GenesisAccount{Balance: oneThousandGO}
+				alloc[addr] = core.GenesisAccount{Balance: oneThousandXPS}
 				keys[addr] = acc.PrivateKeyHex()
 			}
 

@@ -35,7 +35,7 @@ const (
 )
 
 // Official short name of the protocol used during capability negotiation.
-var ProtocolName = "xps"
+var ProtocolName = "eth"
 
 // Supported versions of the xps protocol (first is primary).
 var ProtocolVersions = []uint{xps63, xps62}
