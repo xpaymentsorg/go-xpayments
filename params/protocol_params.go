@@ -61,7 +61,7 @@ const (
 	NetSstoreResetClearRefund uint64 = 19800 // Once per SSTORE operation for resetting to the original zero value
 
 	JumpdestGas      uint64 = 1     // Refunded gas, once per SSTORE operation if the zeroness changes to zero.
-	EpochDuration    uint64 = 30000 // Duration between proof-of-work epochs.
+	EpochDuration    uint64 = 300   // Duration between proof-of-work epochs.
 	CallGas          uint64 = 40    // Once per CALL operation & message call transaction.
 	CreateDataGas    uint64 = 200   //
 	CallCreateDepth  uint64 = 1024  // Maximum depth of call/create stack.
