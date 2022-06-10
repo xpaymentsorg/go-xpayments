@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-xpayments commands.
+// Package utils contains internal helper functions for go-ethereum commands.
 package utils
 
 import (
@@ -41,8 +41,12 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/eth"
+	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
+	"github.com/xpaymentsorg/go-xpayments/eth/gasprice"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/les"
 	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/lxs"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/netstats"
 	"github.com/xpaymentsorg/go-xpayments/node"
@@ -52,10 +56,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/p2p/netutil"
 	"github.com/xpaymentsorg/go-xpayments/params"
 	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
-	"github.com/xpaymentsorg/go-xpayments/xps"
-	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
-	"github.com/xpaymentsorg/go-xpayments/xps/gasprice"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var (
@@ -128,7 +128,7 @@ var (
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 150=mainnet, 151=testnet)",
-		Value: xps.DefaultConfig.NetworkId,
+		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
@@ -172,7 +172,7 @@ var (
 		Name:  "light",
 		Usage: "Enable light client mode",
 	}
-	defaultSyncMode = xps.DefaultConfig.SyncMode
+	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
 		Usage: `Blockchain sync mode ("fast", "full", or "light")`,
@@ -185,13 +185,13 @@ var (
 	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
-		Usage: "Maximum percentage of time allowed for serving LXS requests (0-90)",
+		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
 		Value: 0,
 	}
 	LightPeersFlag = cli.IntFlag{
 		Name:  "lightpeers",
-		Usage: "Maximum number of LXS client peers",
-		Value: xps.DefaultConfig.LightPeers,
+		Usage: "Maximum number of LES client peers",
+		Value: eth.DefaultConfig.LightPeers,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
@@ -219,37 +219,37 @@ var (
 	TxPoolPriceLimitFlag = cli.Uint64Flag{
 		Name:  "txpool.pricelimit",
 		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
-		Value: xps.DefaultConfig.TxPool.PriceLimit,
+		Value: eth.DefaultConfig.TxPool.PriceLimit,
 	}
 	TxPoolPriceBumpFlag = cli.Uint64Flag{
 		Name:  "txpool.pricebump",
 		Usage: "Price bump percentage to replace an already existing transaction",
-		Value: xps.DefaultConfig.TxPool.PriceBump,
+		Value: eth.DefaultConfig.TxPool.PriceBump,
 	}
 	TxPoolAccountSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.accountslots",
 		Usage: "Minimum number of executable transaction slots guaranteed per account",
-		Value: xps.DefaultConfig.TxPool.AccountSlots,
+		Value: eth.DefaultConfig.TxPool.AccountSlots,
 	}
 	TxPoolGlobalSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.globalslots",
 		Usage: "Maximum number of executable transaction slots for all accounts",
-		Value: xps.DefaultConfig.TxPool.GlobalSlots,
+		Value: eth.DefaultConfig.TxPool.GlobalSlots,
 	}
 	TxPoolAccountQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.accountqueue",
 		Usage: "Maximum number of non-executable transaction slots permitted per account",
-		Value: xps.DefaultConfig.TxPool.AccountQueue,
+		Value: eth.DefaultConfig.TxPool.AccountQueue,
 	}
 	TxPoolGlobalQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.globalqueue",
 		Usage: "Maximum number of non-executable transaction slots for all accounts",
-		Value: xps.DefaultConfig.TxPool.GlobalQueue,
+		Value: eth.DefaultConfig.TxPool.GlobalQueue,
 	}
 	TxPoolLifetimeFlag = cli.DurationFlag{
 		Name:  "txpool.lifetime",
 		Usage: "Maximum amount of time non-executable transaction are queued",
-		Value: xps.DefaultConfig.TxPool.Lifetime,
+		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
@@ -294,36 +294,36 @@ var (
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks",
-		Value: xps.DefaultConfig.MinerGasFloor,
+		Value: eth.DefaultConfig.MinerGasFloor,
 	}
 	MinerLegacyGasTargetFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas floor for mined blocks (deprecated, use --miner.gastarget)",
-		Value: xps.DefaultConfig.MinerGasFloor,
+		Value: eth.DefaultConfig.MinerGasFloor,
 	}
 	MinerGasLimitFlag = cli.Uint64Flag{
 		Name:  "miner.gaslimit",
 		Usage: "Target gas ceiling for mined blocks",
-		Value: xps.DefaultConfig.MinerGasCeil,
+		Value: eth.DefaultConfig.MinerGasCeil,
 	}
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
-		Value: xps.DefaultConfig.MinerGasPrice,
+		Value: eth.DefaultConfig.MinerGasPrice,
 	}
 	MinerLegacyGasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimum gas price for mining a transaction (deprecated, use --miner.gasprice)",
-		Value: xps.DefaultConfig.MinerGasPrice,
+		Value: eth.DefaultConfig.MinerGasPrice,
 	}
-	MinerXpsbaseFlag = cli.StringFlag{
-		Name:  "miner.xpsbase",
+	MinerEtherbaseFlag = cli.StringFlag{
+		Name:  "miner.etherbase",
 		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
 	}
-	MinerLegacyXpsbaseFlag = cli.StringFlag{
-		Name:  "xpsbase",
-		Usage: "Public address for block mining rewards (default = first account, deprecated, use --miner.xpsbase)",
+	MinerLegacyEtherbaseFlag = cli.StringFlag{
+		Name:  "etherbase",
+		Usage: "Public address for block mining rewards (default = first account, deprecated, use --miner.etherbase)",
 		Value: "0",
 	}
 	MinerExtraDataFlag = cli.StringFlag{
@@ -337,7 +337,7 @@ var (
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
 		Usage: "Time interval to recreate the block being mined",
-		Value: xps.DefaultConfig.MinerRecommit,
+		Value: eth.DefaultConfig.MinerRecommit,
 	}
 	MinerNoVerfiyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
@@ -523,17 +523,17 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: xps.DefaultConfig.GPO.Blocks,
+		Value: eth.DefaultConfig.GPO.Blocks,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: xps.DefaultConfig.GPO.Percentile,
+		Value: eth.DefaultConfig.GPO.Percentile,
 	}
 	GpoMaxGasPriceFlag = cli.Int64Flag{
 		Name:  "gpomaxprice",
 		Usage: "Maximum gas price will be recommended by gpo",
-		Value: xps.DefaultConfig.GPO.MaxPrice.Int64(),
+		Value: eth.DefaultConfig.GPO.MaxPrice.Int64(),
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
@@ -551,25 +551,25 @@ var (
 	}
 
 	// S3 archival settings
-	XpsdbEndpointFlag = cli.StringFlag{
-		Name:  "xpsdb.endpoint",
+	EthdbEndpointFlag = cli.StringFlag{
+		Name:  "ethdb.endpoint",
 		Usage: "S3 compatible archive endpoint.",
 	}
-	XpsdbBucketFlag = cli.StringFlag{
-		Name:  "xpsdb.bucket",
-		Usage: "Name of xpsdb archive bucket. Must already exist.",
+	EthdbBucketFlag = cli.StringFlag{
+		Name:  "ethdb.bucket",
+		Usage: "Name of ethdb archive bucket. Must already exist.",
 	}
-	XpsdbAccessKeyIDFlag = cli.StringFlag{
-		Name:  "xpsdb.accesskeyid",
-		Usage: "Xpsdb archive access key ID.",
+	EthdbAccessKeyIDFlag = cli.StringFlag{
+		Name:  "ethdb.accesskeyid",
+		Usage: "Ethdb archive access key ID.",
 	}
-	XpsdbSecretAccessKeyFlag = cli.StringFlag{
-		Name:  "xpsdb.secretaccesskey",
-		Usage: "Xpsdb archive secret access key.",
+	EthdbSecretAccessKeyFlag = cli.StringFlag{
+		Name:  "ethdb.secretaccesskey",
+		Usage: "Ethdb archive secret access key.",
 	}
-	XpsdbMaxOpenSegmentCountFlag = cli.IntFlag{
-		Name:  "xpsdb.maxopensegmentcount",
-		Usage: "Xpsdb per-table open segment count.",
+	EthdbMaxOpenSegmentCountFlag = cli.IntFlag{
+		Name:  "ethdb.maxopensegmentcount",
+		Usage: "Ethdb per-table open segment count.",
 	}
 
 	EWASMInterpreterFlag = cli.StringFlag{
@@ -780,7 +780,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `gpay account list`)")
+	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
 	log.Warn("-------------------------------------------------------------------")
 
 	accs := ks.Accounts()
@@ -790,24 +790,24 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	return accs[index], nil
 }
 
-// setXpsbase retrieves the xpsbase either from the directly specified
+// setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setXpsbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *xps.Config) {
-	// Extract the current xpsbase, new flag overriding legacy one
-	var xpsbase string
-	if ctx.GlobalIsSet(MinerLegacyXpsbaseFlag.Name) {
-		xpsbase = ctx.GlobalString(MinerLegacyXpsbaseFlag.Name)
+func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
+	// Extract the current etherbase, new flag overriding legacy one
+	var etherbase string
+	if ctx.GlobalIsSet(MinerLegacyEtherbaseFlag.Name) {
+		etherbase = ctx.GlobalString(MinerLegacyEtherbaseFlag.Name)
 	}
-	if ctx.GlobalIsSet(MinerXpsbaseFlag.Name) {
-		xpsbase = ctx.GlobalString(MinerXpsbaseFlag.Name)
+	if ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
+		etherbase = ctx.GlobalString(MinerEtherbaseFlag.Name)
 	}
-	// Convert the xpsbase into an address and configure it
-	if xpsbase != "" {
-		account, err := MakeAddress(ks, xpsbase)
+	// Convert the etherbase into an address and configure it
+	if etherbase != "" {
+		account, err := MakeAddress(ks, etherbase)
 		if err != nil {
-			Fatalf("Invalid miner xpsbase: %v", err)
+			Fatalf("Invalid miner etherbase: %v", err)
 		}
-		cfg.Xpsbase = account.Address
+		cfg.Etherbase = account.Address
 	}
 }
 
@@ -852,11 +852,11 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if !(lightClient || lightServer) {
 		lightPeers = 0
 	}
-	xpsPeers := cfg.MaxPeers - lightPeers
+	ethPeers := cfg.MaxPeers - lightPeers
 	if lightClient {
-		xpsPeers = 0
+		ethPeers = 0
 	}
-	log.Info("Maximum peer count", "XPS", xpsPeers, "LXS", lightPeers, "total", cfg.MaxPeers)
+	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
 
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
@@ -899,7 +899,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
-	setXpsdb(ctx, &cfg.Xpsdb)
+	setEthdb(ctx, &cfg.Ethdb)
 
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
@@ -978,21 +978,21 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setXpsdb(ctx *cli.Context, cfg *xpsdb.Config) {
-	if ctx.GlobalIsSet(XpsdbEndpointFlag.Name) {
-		cfg.Endpoint = ctx.GlobalString(XpsdbEndpointFlag.Name)
+func setEthdb(ctx *cli.Context, cfg *ethdb.Config) {
+	if ctx.GlobalIsSet(EthdbEndpointFlag.Name) {
+		cfg.Endpoint = ctx.GlobalString(EthdbEndpointFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsdbBucketFlag.Name) {
-		cfg.Bucket = ctx.GlobalString(XpsdbBucketFlag.Name)
+	if ctx.GlobalIsSet(EthdbBucketFlag.Name) {
+		cfg.Bucket = ctx.GlobalString(EthdbBucketFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsdbAccessKeyIDFlag.Name) {
-		cfg.AccessKeyID = ctx.GlobalString(XpsdbAccessKeyIDFlag.Name)
+	if ctx.GlobalIsSet(EthdbAccessKeyIDFlag.Name) {
+		cfg.AccessKeyID = ctx.GlobalString(EthdbAccessKeyIDFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsdbSecretAccessKeyFlag.Name) {
-		cfg.SecretAccessKey = ctx.GlobalString(XpsdbSecretAccessKeyFlag.Name)
+	if ctx.GlobalIsSet(EthdbSecretAccessKeyFlag.Name) {
+		cfg.SecretAccessKey = ctx.GlobalString(EthdbSecretAccessKeyFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsdbMaxOpenSegmentCountFlag.Name) {
-		cfg.MaxOpenSegmentCount = ctx.GlobalInt(XpsdbMaxOpenSegmentCountFlag.Name)
+	if ctx.GlobalIsSet(EthdbMaxOpenSegmentCountFlag.Name) {
+		cfg.MaxOpenSegmentCount = ctx.GlobalInt(EthdbMaxOpenSegmentCountFlag.Name)
 	}
 }
 
@@ -1047,8 +1047,8 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 	}
 }
 
-// SetXpsConfig applies xps-related command line flags to the config.
-func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
+// SetEthConfig applies eth-related command line flags to the config.
+func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, DeveloperFlag, TestnetFlag, LocalFlag)
 	CheckExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
@@ -1056,7 +1056,7 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 	CheckExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	setXpsbase(ctx, ks, cfg)
+	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 
@@ -1174,7 +1174,7 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 				Fatalf("Genesis exists but keystore is empty")
 			}
 			if err := ks.Unlock(accs[0], ""); err != nil {
-				Fatalf("Failed to unlock signer account %q: %v", cfg.Xpsbase, err)
+				Fatalf("Failed to unlock signer account %q: %v", cfg.Etherbase, err)
 			}
 			break
 		}
@@ -1196,11 +1196,11 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 		}
 		log.Info("Signing with account", "address", signer.Address)
 
-		oneGO, ok := new(big.Int).SetString("1000000000000000000", 10)
+		oneXPS, ok := new(big.Int).SetString("1000000000000000000", 10)
 		if !ok {
 			panic("failed to parse big.Int string")
 		}
-		oneThousandGO := new(big.Int).Mul(big.NewInt(1000), oneGO)
+		oneThousandXPS := new(big.Int).Mul(big.NewInt(1000), oneXPS)
 
 		alloc := make(core.GenesisAlloc)
 		seedStrs := ctx.GlobalStringSlice(LocalFundFlag.Name)
@@ -1222,9 +1222,9 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 					if !ok {
 						Fatalf("failed to parse seed amount: %s", parts[1])
 					}
-					amount = a.Mul(a, oneGO)
+					amount = a.Mul(a, oneXPS)
 				} else {
-					amount = oneThousandGO
+					amount = oneThousandXPS
 				}
 
 				alloc[addr] = core.GenesisAccount{Balance: amount}
@@ -1237,7 +1237,7 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xps.Config) {
 					Fatalf("Failed to create account: %v", err)
 				}
 				addr := crypto.PubkeyToAddress(acc.PrivateKey().PublicKey)
-				alloc[addr] = core.GenesisAccount{Balance: oneThousandGO}
+				alloc[addr] = core.GenesisAccount{Balance: oneThousandXPS}
 				keys[addr] = acc.PrivateKeyHex()
 			}
 
@@ -1270,19 +1270,19 @@ func GenesisExists(ctx *cli.Context, stack *node.Node) bool {
 	return stored != common.Hash{}
 }
 
-// RegisterXpsService adds an xPayments client to the stack.
-func RegisterXpsService(ctx context.Context, stack *node.Node, cfg *xps.Config) {
+// RegisterEthService adds an xPayments client to the stack.
+func RegisterEthService(ctx context.Context, stack *node.Node, cfg *eth.Config) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(sctx *node.ServiceContext) (node.Service, error) {
-			return lxs.New(ctx, sctx, cfg)
+			return les.New(ctx, sctx, cfg)
 		})
 	} else {
 		err = stack.Register(func(sctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := xps.New(sctx, cfg)
+			fullNode, err := eth.New(sctx, cfg)
 			if fullNode != nil && cfg.LightServ > 0 {
-				ls, _ := lxs.NewLxsServer(fullNode, cfg)
-				fullNode.AddLxsServer(ls)
+				ls, _ := les.NewLesServer(fullNode, cfg)
+				fullNode.AddLesServer(ls)
 			}
 			return fullNode, err
 		})
@@ -1305,14 +1305,14 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 // the given node.
 func RegisterNetStatsService(stack *node.Node, cfg netstats.Config) {
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		// Retrieve both xps and lxs services
-		var xpsServ *xps.XPS
-		ctx.Service(&xpsServ)
+		// Retrieve both eth and les services
+		var ethServ *eth.XPS
+		ctx.Service(&ethServ)
 
-		var lxsServ *lxs.LightXPS
-		ctx.Service(&lxsServ)
+		var lesServ *les.LightXPS
+		ctx.Service(&lesServ)
 
-		return netstats.New(cfg, xpsServ, lxsServ), nil
+		return netstats.New(cfg, ethServ, lesServ), nil
 	}); err != nil {
 		Fatalf("Failed to register the xPayments Stats service: %v", err)
 	}
@@ -1370,8 +1370,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	cache := &core.CacheConfig{
 		Disabled:      ctx.GlobalString(GCModeFlag.Name) == "archive",
-		TrieNodeLimit: xps.DefaultConfig.TrieCache,
-		TrieTimeLimit: xps.DefaultConfig.TrieTimeout,
+		TrieNodeLimit: eth.DefaultConfig.TrieCache,
+		TrieTimeLimit: eth.DefaultConfig.TrieTimeout,
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cache.TrieNodeLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
@@ -1405,11 +1405,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 // This is a temporary function used for migrating old command/flags to the
 // new format.
 //
-// e.g. gpay account new --keystore /tmp/mykeystore --lightkdf
+// e.g. geth account new --keystore /tmp/mykeystore --lightkdf
 //
 // is equivalent after calling this method with:
 //
-// gpay --keystore /tmp/mykeystore --lightkdf account new
+// geth --keystore /tmp/mykeystore --lightkdf account new
 //
 // This allows the use of the existing configuration functionality.
 // When all flags are migrated this function can be removed and the existing

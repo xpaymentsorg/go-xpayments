@@ -58,7 +58,7 @@ type Database interface {
 	TrieDB() *trie.Database
 }
 
-// Trie is a xPayments Merkle Trie.
+// Trie is a Ethereum Merkle Trie.
 type Trie interface {
 	TryGet(key []byte) ([]byte, error)
 	TryUpdate(key, value []byte) error

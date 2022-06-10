@@ -25,7 +25,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/xpaymentsclient"
 )
 
-// XPSClient provides access to the xPayments APIs.
+// XPSClient provides access to the Ethereum APIs.
 type XPSClient struct {
 	client *xpaymentsclient.Client
 }

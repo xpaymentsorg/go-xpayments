@@ -192,8 +192,8 @@ func (c *ChtIndexerBackend) Commit() error {
 
 const (
 	BloomTrieFrequency        = 32768
-	xpsBloomBitsSection       = 4096
-	xpsBloomBitsConfirmations = 256
+	ethBloomBitsSection       = 4096
+	ethBloomBitsConfirmations = 256
 )
 
 var (
@@ -240,12 +240,12 @@ func NewBloomTrieIndexer(db common.Database, clientMode bool) *core.ChainIndexer
 		backend.parentSectionSize = BloomTrieFrequency
 		confirmReq = HelperTrieConfirmations
 	} else {
-		backend.parentSectionSize = xpsBloomBitsSection
+		backend.parentSectionSize = ethBloomBitsSection
 		confirmReq = HelperTrieProcessConfirmations
 	}
 	backend.bloomTrieRatio = BloomTrieFrequency / backend.parentSectionSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency, confirmReq-xpsBloomBitsConfirmations, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency, confirmReq-ethBloomBitsConfirmations, time.Millisecond*100, "bloomtrie")
 }
 
 // Reset implements core.ChainIndexerBackend

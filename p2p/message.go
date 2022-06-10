@@ -29,9 +29,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/rlp"
 )
 
-// xps protocol message codes
+// eth protocol message codes
 const (
-	// Protocol messages belonging to xps/62
+	// Protocol messages belonging to eth/62
 	StatusMsg          = 0x00
 	NewBlockHashesMsg  = 0x01
 	TxMsg              = 0x02
@@ -41,7 +41,7 @@ const (
 	BlockBodiesMsg     = 0x06
 	NewBlockMsg        = 0x07
 
-	// Protocol messages belonging to xps/63
+	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f

@@ -33,11 +33,11 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts/usbwallet"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 const (
@@ -53,7 +53,7 @@ const (
 // all registered services.
 type Config struct {
 	// Name sets the instance name of the node. It must not contain the / character and is
-	// used in the devp2p node identifier. The instance name of gpay is "gpay". If no
+	// used in the devp2p node identifier. The instance name of geth is "geth". If no
 	// value is specified, the basename of the current executable is used.
 	Name string `toml:"-"`
 
@@ -169,8 +169,8 @@ type Config struct {
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
-	// Xpsdb provides db-specific settings.
-	Xpsdb xpsdb.Config `toml:,omitempty`
+	// Ethdb provides db-specific settings.
+	Ethdb ethdb.Config `toml:,omitempty`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -277,7 +277,7 @@ func (c *Config) name() string {
 	return c.Name
 }
 
-// These resources are resolved differently for "gpay" instances.
+// These resources are resolved differently for "geth" instances.
 var isOldGpayResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,

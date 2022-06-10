@@ -16,7 +16,7 @@
 
 package params
 
-// GasTable organizes gas prices for different xpayments phases.
+// GasTable organizes gas prices for different ethereum phases.
 type GasTable struct {
 	ExtcodeSize uint64
 	ExtcodeCopy uint64
@@ -36,7 +36,7 @@ type GasTable struct {
 	CreateBySuicide uint64
 }
 
-// Variables containing gas prices for different xpayments phases.
+// Variables containing gas prices for different ethereum phases.
 var (
 	// GasTableHomestead contain the gas prices for
 	// the homestead phase.

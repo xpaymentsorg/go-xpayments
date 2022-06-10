@@ -29,9 +29,9 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/internal/jsre"
 	"github.com/xpaymentsorg/go-xpayments/node"
-	"github.com/xpaymentsorg/go-xpayments/xps"
 )
 
 const (
@@ -75,7 +75,7 @@ func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
 type tester struct {
 	workspace string
 	stack     *node.Node
-	xpayments *xps.XPS
+	ethereum  *eth.XPS
 	console   *Console
 	input     *hookedPrompter
 	output    *bytes.Buffer
@@ -83,7 +83,7 @@ type tester struct {
 
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
-func newTester(t *testing.T, confOverride func(*xps.Config)) *tester {
+func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
 	workspace, err := ioutil.TempDir("", "console-tester-")
 	if err != nil {
@@ -95,14 +95,14 @@ func newTester(t *testing.T, confOverride func(*xps.Config)) *tester {
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
-	xpsConf := &xps.Config{
-		Genesis: core.DeveloperGenesisBlock(15, common.Address{}),
-		Xpsbase: common.HexToAddress(testAddress),
+	ethConf := &eth.Config{
+		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
+		Etherbase: common.HexToAddress(testAddress),
 	}
 	if confOverride != nil {
-		confOverride(xpsConf)
+		confOverride(ethConf)
 	}
-	if err = stack.Register(func(sctx *node.ServiceContext) (node.Service, error) { return xps.New(sctx, xpsConf) }); err != nil {
+	if err = stack.Register(func(sctx *node.ServiceContext) (node.Service, error) { return eth.New(sctx, ethConf) }); err != nil {
 		t.Fatalf("failed to register xPayments protocol: %v", err)
 	}
 	// Start the node and assemble the JavaScript console around it
@@ -128,13 +128,13 @@ func newTester(t *testing.T, confOverride func(*xps.Config)) *tester {
 		t.Fatalf("failed to create JavaScript console: %v", err)
 	}
 	// Create the final tester and return
-	var xpayments *xps.XPS
-	stack.Service(&xpayments)
+	var ethereum *eth.XPS
+	stack.Service(&ethereum)
 
 	return &tester{
 		workspace: workspace,
 		stack:     stack,
-		xpayments: xpayments,
+		ethereum:  ethereum,
 		console:   console,
 		input:     prompter,
 		output:    printer,

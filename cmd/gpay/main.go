@@ -30,13 +30,14 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/xpaymentsclient"
-	"github.com/xpaymentsorg/go-xpayments/xps"
 	"go.opencensus.io/trace"
 )
 
@@ -47,6 +48,8 @@ const (
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
+	// xPayments address of the release oracle.
+	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
 	// The app that holds all commands and flags.
 	app = utils.NewApp(gitCommit, "the xPayments command line interface")
 	// flags that configure the node
@@ -93,8 +96,8 @@ var (
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
 		utils.MinerLegacyGasPriceFlag,
-		utils.MinerXpsbaseFlag,
-		utils.MinerLegacyXpsbaseFlag,
+		utils.MinerEtherbaseFlag,
+		utils.MinerLegacyEtherbaseFlag,
 		utils.MinerExtraDataFlag,
 		utils.MinerLegacyExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
@@ -123,11 +126,11 @@ var (
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
-		utils.XpsdbEndpointFlag,
-		utils.XpsdbBucketFlag,
-		utils.XpsdbAccessKeyIDFlag,
-		utils.XpsdbSecretAccessKeyFlag,
-		utils.XpsdbMaxOpenSegmentCountFlag,
+		utils.EthdbEndpointFlag,
+		utils.EthdbBucketFlag,
+		utils.EthdbAccessKeyIDFlag,
+		utils.EthdbSecretAccessKeyFlag,
+		utils.EthdbMaxOpenSegmentCountFlag,
 		configFileFlag,
 	}
 
@@ -214,7 +217,7 @@ func main() {
 	}
 }
 
-// gpay is the main entry point into the system if no special subcommand is ran.
+// geth is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func gpay(ctx *cli.Context) error {
@@ -310,7 +313,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
-		var xpayments *xps.XPS
+		var xpayments *eth.XPS
 		if err := stack.Service(&xpayments); err != nil {
 			utils.Fatalf("xPayments service not running: %v", err)
 		}

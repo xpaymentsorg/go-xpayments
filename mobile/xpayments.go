@@ -73,7 +73,7 @@ func (msg *CallMsg) SetTo(address *Address) {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the xPayments network.
+// the Ethereum network.
 type SyncProgress struct {
 	progress xpayments.SyncProgress
 }

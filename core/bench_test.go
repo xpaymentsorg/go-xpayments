@@ -31,8 +31,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {
@@ -100,7 +100,7 @@ func init() {
 	}
 }
 
-// genTxRing returns a block generator that sends xps in a ring
+// genTxRing returns a block generator that sends ether in a ring
 // among n accounts. This is creates n entries in the state database
 // and fills the blocks with many small transactions.
 func genTxRing(naccounts int) func(int, *BlockGen) {
@@ -133,15 +133,15 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
 	var db common.Database
 	if !disk {
-		db = xpsdb.NewMemDatabase()
+		db = ethdb.NewMemDatabase()
 	} else {
-		dir, err := ioutil.TempDir("", "xps-core-bench")
+		dir, err := ioutil.TempDir("", "eth-core-bench")
 		if err != nil {
 			b.Fatalf("cannot create temporary directory: %v", err)
 		}
 		defer os.RemoveAll(dir)
 
-		diskDB := xpsdb.NewDB(dir)
+		diskDB := ethdb.NewDB(dir)
 		if err := diskDB.Open(); err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}
@@ -236,11 +236,11 @@ func makeChainForBench(db common.Database, full bool, count uint64) {
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
 	for i := 0; i < b.N; i++ {
-		dir, err := ioutil.TempDir("", "xps-chain-bench")
+		dir, err := ioutil.TempDir("", "eth-chain-bench")
 		if err != nil {
 			b.Fatalf("cannot create temporary directory: %v", err)
 		}
-		db := xpsdb.NewDB(dir)
+		db := ethdb.NewDB(dir)
 		if err := db.Open(); err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
@@ -251,13 +251,13 @@ func benchWriteChain(b *testing.B, full bool, count uint64) {
 }
 
 func benchReadChain(b *testing.B, full bool, count uint64) {
-	dir, err := ioutil.TempDir("", "xps-chain-bench")
+	dir, err := ioutil.TempDir("", "eth-chain-bench")
 	if err != nil {
 		b.Fatalf("cannot create temporary directory: %v", err)
 	}
 	defer os.RemoveAll(dir)
 
-	db := xpsdb.NewDB(dir)
+	db := ethdb.NewDB(dir)
 	if err := db.Open(); err != nil {
 		b.Fatalf("error opening database at %v: %v", dir, err)
 	}
@@ -268,7 +268,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		db := xpsdb.NewDB(dir)
+		db := ethdb.NewDB(dir)
 		if err := db.Open(); err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}

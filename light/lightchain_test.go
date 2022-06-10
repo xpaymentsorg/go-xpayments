@@ -27,8 +27,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 // So we can deterministically seed different blockchains
@@ -53,7 +53,7 @@ func makeHeaderChain(parent *types.Header, n int, db common.Database, seed int) 
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int) (common.Database, *LightChain, error) {
-	db := xpsdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	signer := hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 	gspec := core.Genesis{Config: params.TestChainConfig, Signer: signer}
 	genesis := gspec.MustCommit(db)
@@ -71,7 +71,7 @@ func newCanonical(n int) (common.Database, *LightChain, error) {
 
 // newTestLightChain creates a LightChain that doesn't validate anything.
 func newTestLightChain() *LightChain {
-	db := xpsdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	gspec := &core.Genesis{
 		Difficulty: big.NewInt(1),
 		Config:     params.TestChainConfig,

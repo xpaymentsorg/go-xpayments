@@ -27,8 +27,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 type testerVote struct {
@@ -39,7 +39,7 @@ type testerVote struct {
 }
 
 // testerAccountPool is a pool to maintain currently active tester accounts,
-// mapped from textual names used in the tests below to actual xPayments private
+// mapped from textual names used in the tests below to actual Ethereum private
 // keys capable of signing transactions.
 type testerAccountPool struct {
 	accounts map[string]*ecdsa.PrivateKey
@@ -66,7 +66,7 @@ func (ap *testerAccountPool) address(account string) common.Address {
 	if ap.accounts[account] == nil {
 		ap.accounts[account], _ = crypto.GenerateKey()
 	}
-	// Resolve and return the xPayments address
+	// Resolve and return the Ethereum address
 	return crypto.PubkeyToAddress(ap.accounts[account].PublicKey)
 }
 
@@ -457,7 +457,7 @@ func (tt *votingTest) run(t *testing.T) {
 		Signer:    make([]byte, signatureLength),
 	}
 	// Create a pristine blockchain with the genesis injected
-	db := xpsdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	genesis.Commit(db)
 
 	// Assemble a chain of headers from the cast votes

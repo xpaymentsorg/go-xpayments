@@ -21,10 +21,10 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 )
 
-// Implement our XpsTest Manager
+// Implement our EthTest Manager
 type TestManager struct {
 	// stateManager *StateManager
 	eventMux *InterfaceFeed
@@ -76,7 +76,7 @@ func (tm *TestManager) Db() common.Database {
 }
 
 func NewTestManager() *TestManager {
-	db := xpsdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 
 	testManager := &TestManager{}
 	testManager.eventMux = new(InterfaceFeed)

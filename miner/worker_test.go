@@ -29,8 +29,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var (
@@ -75,7 +75,7 @@ type testWorkerBackend struct {
 
 func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, n int) *testWorkerBackend {
 	var (
-		db    = xpsdb.NewMemDatabase()
+		db    = ethdb.NewMemDatabase()
 		gspec = core.Genesis{
 			Config:    chainConfig,
 			Alloc:     core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
@@ -126,7 +126,7 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	backend := newTestWorkerBackend(t, chainConfig, engine, blocks)
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(chainConfig, engine, backend, new(core.InterfaceFeed), time.Second, params.GenesisGasLimit, params.GenesisGasLimit, nil)
-	w.setXpsbase(testBankAddress)
+	w.setEtherbase(testBankAddress)
 	return w, backend
 }
 

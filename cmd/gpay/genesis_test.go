@@ -97,10 +97,10 @@ func (test customGenesisTest) run(t *testing.T) {
 	runGpay(t, "--datadir", datadir, "init", json).WaitExit()
 
 	// Query the custom genesis block
-	gpay := runGpay(t,
+	geth := runGpay(t,
 		"--datadir", datadir, "--maxpeers", "0", "--port", "0",
 		"--nodiscover", "--nat", "none", "--ipcdisable",
 		"--exec", test.query, "console")
-	gpay.ExpectRegexp(test.result)
-	gpay.ExpectExit()
+	geth.ExpectRegexp(test.result)
+	geth.ExpectExit()
 }

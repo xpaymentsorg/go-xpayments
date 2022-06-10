@@ -42,11 +42,11 @@ import (
 	"fmt"
 	"hash"
 
-	xpscrypto "github.com/xpaymentsorg/go-xpayments/crypto"
+	ethcrypto "github.com/xpaymentsorg/go-xpayments/crypto"
 )
 
 var (
-	DefaultCurve                  = xpscrypto.S256()
+	DefaultCurve                  = ethcrypto.S256()
 	ErrUnsupportedECDHAlgorithm   = fmt.Errorf("ecies: unsupported ECDH algorithm")
 	ErrUnsupportedECIESParameters = fmt.Errorf("ecies: unsupported ECIES parameters")
 	ErrInvalidKeyLen              = fmt.Errorf("ecies: invalid key size (> %d) in ECIESParams", maxKeyLen)
@@ -106,7 +106,7 @@ var (
 )
 
 var paramsFromCurve = map[elliptic.Curve]*ECIESParams{
-	xpscrypto.S256(): ECIES_AES128_SHA256,
+	ethcrypto.S256(): ECIES_AES128_SHA256,
 	elliptic.P256():  ECIES_AES128_SHA256,
 	elliptic.P384():  ECIES_AES256_SHA384,
 	elliptic.P521():  ECIES_AES256_SHA512,

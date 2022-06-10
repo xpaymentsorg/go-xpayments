@@ -26,7 +26,9 @@ import (
 	"path/filepath"
 
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/lxs"
+	"github.com/xpaymentsorg/go-xpayments/eth"
+	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
+	"github.com/xpaymentsorg/go-xpayments/les"
 	"github.com/xpaymentsorg/go-xpayments/netstats"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
@@ -34,13 +36,11 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/params"
 	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
 	"github.com/xpaymentsorg/go-xpayments/xpaymentsclient"
-	"github.com/xpaymentsorg/go-xpayments/xps"
-	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the xPayments
 // node embedded into a mobile process. The available values are a subset of the
-// entire API provided by go-xpayments to reduce the maintenance surface and dev
+// entire API provided by go-ethereum to reduce the maintenance surface and dev
 // complexity.
 type NodeConfig struct {
 	// Bootstrap nodes used to establish connectivity with the rest of the network.
@@ -50,26 +50,26 @@ type NodeConfig struct {
 	// set to zero, then only the configured static and trusted peers can connect.
 	MaxPeers int
 
-	// xPaymentsEnabled specifies whether the node should run the xPayments protocol.
-	xPaymentsEnabled bool
+	// EthereumEnabled specifies whether the node should run the xPayments protocol.
+	EthereumEnabled bool
 
-	// xPaymentsNetworkID is the network identifier used by the xPayments protocol to
+	// EthereumNetworkID is the network identifier used by the xPayments protocol to
 	// decide if remote peers should be accepted or not.
-	xPaymentsNetworkID int64 // uint64 in truth, but Java can't handle that...
+	EthereumNetworkID int64 // uint64 in truth, but Java can't handle that...
 
-	// xPaymentsGenesis is the genesis JSON to use to seed the blockchain with. An
+	// EthereumGenesis is the genesis JSON to use to seed the blockchain with. An
 	// empty genesis state is equivalent to using the mainnet's state.
-	xPaymentsGenesis string
+	EthereumGenesis string
 
-	// xPaymentsDatabaseCache is the system memory in MB to allocate for database caching.
+	// EthereumDatabaseCache is the system memory in MB to allocate for database caching.
 	// A minimum of 16MB is always reserved.
-	xPaymentsDatabaseCache int
+	EthereumDatabaseCache int
 
-	// xPaymentsNetStats is a netstats connection string to use to report various
+	// EthereumNetStats is a netstats connection string to use to report various
 	// chain, transaction and node stats to a monitoring server.
 	//
 	// It has the form "nodename:secret@host:port"
-	xPaymentsNetStats string
+	EthereumNetStats string
 
 	// WhisperEnabled specifies whether the node should run the Whisper protocol.
 	WhisperEnabled bool
@@ -78,11 +78,11 @@ type NodeConfig struct {
 // defaultNodeConfig contains the default node configuration values to use if all
 // or some fields are missing from the user's specified list.
 var defaultNodeConfig = &NodeConfig{
-	BootstrapNodes:         FoundationBootnodes(),
-	MaxPeers:               25,
-	xPaymentsEnabled:       true,
-	xPaymentsNetworkID:     1,
-	xPaymentsDatabaseCache: 16,
+	BootstrapNodes:        FoundationBootnodes(),
+	MaxPeers:              25,
+	EthereumEnabled:       true,
+	EthereumNetworkID:     1,
+	EthereumDatabaseCache: 16,
 }
 
 // NewNodeConfig creates a new node option set, initialized to the default values.
@@ -129,39 +129,39 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 
 	var genesis *core.Genesis
-	if config.xPaymentsGenesis != "" {
+	if config.EthereumGenesis != "" {
 		// Parse the user supplied genesis spec if not mainnet
 		genesis = new(core.Genesis)
-		if err := json.Unmarshal([]byte(config.xPaymentsGenesis), genesis); err != nil {
+		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
 			return nil, fmt.Errorf("invalid genesis spec: %v", err)
 		}
 		// If we have the testnet, hard code the chain configs too
-		if config.xPaymentsGenesis == TestnetGenesis() {
+		if config.EthereumGenesis == TestnetGenesis() {
 			genesis.Config = params.TestnetChainConfig
-			if config.xPaymentsNetworkID == 1 {
-				config.xPaymentsNetworkID = 3
+			if config.EthereumNetworkID == 1 {
+				config.EthereumNetworkID = 3
 			}
 		}
 	}
 	// Register the xPayments protocol if requested
-	if config.xPaymentsEnabled {
-		xpsConf := xps.DefaultConfig
-		xpsConf.Genesis = genesis
-		xpsConf.SyncMode = downloader.LightSync
-		xpsConf.NetworkId = uint64(config.xPaymentsNetworkID)
-		xpsConf.DatabaseCache = config.xPaymentsDatabaseCache
+	if config.EthereumEnabled {
+		ethConf := eth.DefaultConfig
+		ethConf.Genesis = genesis
+		ethConf.SyncMode = downloader.LightSync
+		ethConf.NetworkId = uint64(config.EthereumNetworkID)
+		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		if err := rawStack.Register(func(sctx *node.ServiceContext) (node.Service, error) {
 			ctx := context.TODO()
-			return lxs.New(ctx, sctx, &xpsConf)
+			return les.New(ctx, sctx, &ethConf)
 		}); err != nil {
-			return nil, fmt.Errorf("xpayments init: %v", err)
+			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
-		if config.xPaymentsNetStats != "" {
+		if config.EthereumNetStats != "" {
 			if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-				var lesServ *lxs.LightXPS
+				var lesServ *les.LightXPS
 				ctx.Service(&lesServ)
-				cfg, err := netstats.ParseConfig(config.xPaymentsNetStats)
+				cfg, err := netstats.ParseConfig(config.EthereumNetStats)
 				if err != nil {
 					return nil, err
 				}
