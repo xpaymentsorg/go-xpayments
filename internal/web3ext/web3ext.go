@@ -403,7 +403,7 @@ web3._extend({
 
 const Eth_JS = `
 web3._extend({
-	property: 'eth',
+	property: 'xps',
 	methods: [
 		new web3._extend.Method({
 			name: 'chainId',
