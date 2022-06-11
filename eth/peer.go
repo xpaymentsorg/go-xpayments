@@ -471,7 +471,7 @@ func (p *peer) String() string {
 }
 
 // peerSet represents the collection of active peers currently participating in
-// the GoChain sub-protocol.
+// the xPayments sub-protocol.
 type peerSet struct {
 	peers  map[string]*peer
 	lock   sync.RWMutex
