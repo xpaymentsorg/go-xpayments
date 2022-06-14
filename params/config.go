@@ -43,11 +43,11 @@ var (
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(5_100_000),
+		ConstantinopleBlock: big.NewInt(5),
 		PetersburgBlock:     nil,
-		DarvazaBlock:        big.NewInt(17_900_000),
+		DarvazaBlock:        big.NewInt(10),
 		DarvazaDefaultGas:   new(big.Int).SetUint64(2_000 * Shannon),
-		HafthorBlock:        big.NewInt(23_817_200), // 2022-02-23
+		HafthorBlock:        big.NewInt(15),
 		HafthorStakeAddress: common.HexToAddress("0xa779572d436fe32bbfda9e057806a3f4ae2d9f58"),
 
 		Clique: DefaultCliqueConfig(),
